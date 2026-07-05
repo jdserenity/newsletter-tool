@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}@{{ account.handle }}{% endblock %}
+{% block content %}
+<h2>@{{ account.handle }}{% if account.display_name %} — {{ account.display_name }}{% endif %}</h2>
+<div class="card">
+  <div class="muted">Total API cost for this account: <strong>${{ "%.3f"|format(account.total_cost) }}</strong></div>
+  <div class="muted">RSS feed: <a href="/feeds/{{ account.id }}.xml">/feeds/{{ account.id }}.xml</a></div>
+</div>
+
+<h2>Settings</h2>
+<div class="card">
+  <form method="post" action="/accounts/{{ account.id }}/settings">
+    <label class="setting"><input type="checkbox" name="include_quotes" value="true" {% if account.include_quotes %}checked{% endif %}> Include quote tweets</label>
+    <label class="setting"><input type="checkbox" name="include_replies" value="true" {% if account.include_replies %}checked{% endif %}> Include replies</label>
+    <label class="setting"><input type="checkbox" name="include_retweets" value="true" {% if account.include_retweets %}checked{% endif %}> Include retweets</label>
+    <button type="submit">Save settings</button>
+  </form>
+</div>
+
+<h2>Digests</h2>
+{% for d in digests %}
+<div class="card row">
+  <a href="/digests/{{ d.id }}">Week of {{ d.week_start[:10] }}</a>
+  <span class="muted">{{ d.item_count }} items · ${{ "%.3f"|format(d.cost_usd) }}</span>
+</div>
+{% else %}
+<p class="muted">No digests yet for this account.</p>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Weekly Digests{% endblock %}</title>
+<style>
+  :root {
+    --bg: #f7f5f0; --card: #ffffff; --ink: #1a1a1a; --muted: #6b6b6b;
+    --accent: #2f5d62; --accent-soft: #e4eeee; --border: #e5e1d8; --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; line-height: 1.55;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  header.site { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2rem; }
+  header.site h1 { font-size: 1.35rem; margin: 0; letter-spacing: -0.01em; }
+  header.site h1 a { color: var(--ink); text-decoration: none; }
+  header.site .tag { color: var(--muted); font-size: 0.85rem; }
+  h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 2rem 0 0.75rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1rem 1.25rem; margin-bottom: 0.75rem;
+  }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); font-size: 0.85rem; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  form.inline { display: inline; }
+  input[type=text] {
+    padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 1rem; background: var(--card);
+  }
+  button {
+    padding: 0.5rem 0.9rem; border: none; border-radius: 8px; cursor: pointer;
+    background: var(--accent); color: #fff; font-size: 0.9rem;
+  }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem;
+  }
+  .tweet { border-left: 3px solid var(--accent-soft); padding: 0.4rem 0 0.4rem 1rem; margin: 0.9rem 0; }
+  .tweet .meta { color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem; }
+  label.setting { display: block; margin: 0.4rem 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <h1><a href="/">Weekly Digests</a></h1>
+    <span class="tag">log off without losing the signal</span>
+  </header>
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>

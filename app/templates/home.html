@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Tracked accounts</h2>
+{% for a in accounts %}
+<div class="card row">
+  <div>
+    <a href="/accounts/{{ a.id }}"><strong>@{{ a.handle }}</strong></a>
+    {% if a.display_name %}<span class="muted">{{ a.display_name }}</span>{% endif %}
+    <div class="muted">API cost to date: ${{ "%.3f"|format(a.total_cost) }}</div>
+  </div>
+  <form class="inline" method="post" action="/accounts/{{ a.id }}/remove">
+    <button class="ghost" type="submit">Remove</button>
+  </form>
+</div>
+{% else %}
+<p class="muted">No accounts tracked yet.</p>
+{% endfor %}
+
+<div class="card">
+  <form method="post" action="/accounts" class="row">
+    <input type="text" name="handle" placeholder="@handle" required>
+    <button type="submit">Track account</button>
+  </form>
+</div>
+
+<h2>Recent digests</h2>
+{% for d in digests %}
+<div class="card row">
+  <div>
+    <a href="/digests/{{ d.id }}"><strong>@{{ d.handle }}</strong> — week of {{ d.week_start[:10] }}</a>
+    <div class="muted">{{ d.item_count }} items · cost ${{ "%.3f"|format(d.cost_usd) }}</div>
+  </div>
+  <span class="pill">digest</span>
+</div>
+{% else %}
+<p class="muted">No digests yet. They build weekly, or can be run manually.</p>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}@{{ digest.handle }} — week of {{ digest.week_start[:10] }}{% endblock %}
+{% block content %}
+<h2>@{{ digest.handle }} — week of {{ digest.week_start[:10] }}</h2>
+<div class="card">
+  <span class="muted">{{ digest.item_count }} items · API cost ${{ "%.3f"|format(digest.cost_usd) }} ·
+  built {{ digest.built_at }}</span>
+</div>
+
+{% for item in items %}
+<div class="tweet">
+  <div>{{ item.text }}</div>
+  <div class="meta">
+    <span class="pill">{{ item.kind }}</span>
+    {{ item.created_at[:16].replace("T", " · ") }} ·
+    {{ item.likes }} likes · {{ item.reposts }} reposts ·
+    <a href="{{ item.url }}">view on X</a>
+  </div>
+</div>
+{% else %}
+<p class="muted">Nothing this week.</p>
+{% endfor %}
+{% endblock %}
