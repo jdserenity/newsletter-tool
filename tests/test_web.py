@@ -11,6 +11,17 @@ def client(tmp_path):
     c.db_path = str(tmp_path / "test.db")
     yield c
 
+def test_home_builds_newsletter_from_stored_tweets_on_load(client):
+  from app.fetch.runner import week_bounds
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "karpathy")
+  ws, we = week_bounds()
+  db.save_tweets(c, aid, [{"id": "99", "text": "stored tweet", "created_at": "2026-06-23T12:00:00Z", "kind": "post"}])
+  r = client.get("/")
+  assert r.status_code == 200
+  assert "stored tweet" in r.text
+  assert db.edition_for_week(c, aid, ws) is not None
+
 def test_home_empty(client):
   r = client.get("/")
   assert r.status_code == 200

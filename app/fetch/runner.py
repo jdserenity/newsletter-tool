@@ -46,6 +46,17 @@ def _verify_editions(conn, week_start):
   if missing:
     raise RuntimeError("Newsletter build failed for: " + ", ".join(f"@{h}" for h in missing))
 
+def repair_missing_editions(conn, now=None):
+  """Build newsletters from stored tweets when the week has tweets but no edition row (no API calls)."""
+  week_start, week_end = week_bounds(now)
+  repaired = []
+  for account in db.list_accounts(conn):
+    if db.edition_for_week(conn, account["id"], week_start) is not None: continue
+    if not db.tweets_for_week(conn, account["id"], week_start, week_end): continue
+    build_account_edition(conn, account, week_start, week_end, cost=0.0)
+    repaired.append(account["handle"])
+  return repaired
+
 def run_weekly_fetch(conn, client=None, now=None, db_path=None):
   """Fetch + build newsletters for all active accounts. Returns list of (handle, cost)."""
   from app.user_actions import enqueue_newsletter_likes, start_like_drain

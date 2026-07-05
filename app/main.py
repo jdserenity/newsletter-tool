@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import auth, db
+from app.fetch.runner import repair_missing_editions
 from app.scheduler import start_scheduler
 from app.user_actions import UserActionsClient, follow_tracked_account
 
@@ -98,7 +99,9 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
 
   @app.get("/", response_class=HTMLResponse)
   def home(request: Request):
-    return render(request, "home.html", {"cards": newsletter_cards(conn())})
+    c = conn()
+    repair_missing_editions(c)
+    return render(request, "home.html", {"cards": newsletter_cards(c)})
 
   @app.post("/accounts")
   def add_account(request: Request, handle: str = Form(...)):

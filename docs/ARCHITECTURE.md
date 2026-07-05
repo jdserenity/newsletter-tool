@@ -12,7 +12,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - One weekly newsletter edition per account per week (stored in the `editions` table).
 - Per-account granular settings (e.g. include/exclude quote tweets). Settings affect which API calls are made (fetch layer), not just newsletter rendering.
 - Per-account visibility into X API cost incurred by that account, computed from rows in the `api_calls` table (no log files).
-- Homepage: horizontally scrollable carousel of newsletter cards (one per account). Each card shows settings toggles, API cost, and the latest newsletter inline — no separate account list or detail page.
+- Homepage: horizontally scrollable carousel of newsletter cards (one per account). Each card shows settings toggles, API cost, and the latest newsletter inline — no separate account list or detail page. On load, missing newsletters are built from stored tweets when the current week has tweets but no edition row (no X API calls).
 - RSS feed structure is not finalized (per-account vs consolidated recap). v1 ships per-account feeds at `/feeds/{id}.xml` as the baseline.
 
 ## Tech stack
