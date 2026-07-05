@@ -52,6 +52,17 @@ CREATE TABLE IF NOT EXISTS api_calls (
   cost_usd REAL NOT NULL,
   called_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS oauth_session (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  x_user_id TEXT NOT NULL,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS liked_tweets (
+  tweet_id TEXT NOT NULL PRIMARY KEY,
+  liked_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 def connect(db_path=None):
@@ -141,3 +152,27 @@ def get_digest(conn, digest_id):
     "SELECT d.*, a.handle, a.display_name FROM digests d JOIN accounts a ON a.id = d.account_id WHERE d.id = ?",
     (digest_id,)).fetchone()
   return dict(row) if row else None
+
+# --- oauth session (single owner) ---
+
+def save_oauth_session(conn, x_user_id, access_token, refresh_token=None):
+  conn.execute(
+    """INSERT INTO oauth_session (id, x_user_id, access_token, refresh_token, updated_at) VALUES (1, ?, ?, ?, datetime('now'))
+       ON CONFLICT(id) DO UPDATE SET
+         x_user_id = excluded.x_user_id, access_token = excluded.access_token,
+         refresh_token = COALESCE(excluded.refresh_token, oauth_session.refresh_token),
+         updated_at = datetime('now')""",
+    (x_user_id, access_token, refresh_token))
+  conn.commit()
+
+def get_oauth_session(conn):
+  row = conn.execute("SELECT * FROM oauth_session WHERE id = 1").fetchone()
+  return dict(row) if row else None
+
+# --- liked tweets (owner actions) ---
+
+def is_tweet_liked(conn, tweet_id):
+  return conn.execute("SELECT 1 FROM liked_tweets WHERE tweet_id = ?", (tweet_id,)).fetchone() is not None
+
+def mark_tweet_liked(conn, tweet_id):
+  conn.execute("INSERT OR IGNORE INTO liked_tweets (tweet_id) VALUES (?)", (tweet_id,)); conn.commit()

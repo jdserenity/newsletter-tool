@@ -2,7 +2,7 @@
 settings at the API level, records costs in the DB, and stores raw tweets."""
 from datetime import datetime, timedelta, timezone
 
-from app import db
+from app import auth, db
 from app.fetch.client import XClient, classify_tweet
 
 def week_bounds(now=None):
@@ -30,10 +30,14 @@ def fetch_account_week(conn, client, account, week_start, week_end):
   db.save_tweets(conn, account["id"], tweets)
   return cost
 
-def run_weekly_fetch(conn, client=None, now=None):
+def run_weekly_fetch(conn, client=None, now=None, auth_config=None, actions_client=None):
   """Fetch + build digests for all active accounts. Returns list of (handle, cost)."""
   from app.digest import build_digest
+  from app.user_actions import UserActionsClient, like_digest_items
   client = client or XClient()
+  actions_client = actions_client or UserActionsClient()
+  auth_config = auth_config or auth.AuthConfig.from_env()
+  access_token, owner_id = auth.get_valid_access_token(conn, auth_config) if auth_config.enabled else (None, None)
   week_start, week_end = week_bounds(now)
   results = []
   for account in db.list_accounts(conn):
@@ -42,5 +46,6 @@ def run_weekly_fetch(conn, client=None, now=None):
     tweets = db.tweets_for_week(conn, account["id"], week_start, week_end)
     items = build_digest(tweets, account)
     db.save_digest(conn, account["id"], week_start, week_end, items, cost)
+    like_digest_items(conn, actions_client, access_token, owner_id, items)
     results.append((account["handle"], cost))
   return results

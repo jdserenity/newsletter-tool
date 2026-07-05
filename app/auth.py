@@ -7,6 +7,8 @@ from urllib.parse import urlencode
 
 import httpx
 
+from app import db
+
 AUTH_URL = "https://x.com/i/oauth2/authorize"
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
 USER_ME_URL = "https://api.x.com/2/users/me"
@@ -109,6 +111,20 @@ def store_user_session(request, token, me):
   request.session[SESSION_USER_ID] = me["id"]
   request.session[SESSION_USERNAME] = me["username"]
   request.session[SESSION_NAME] = me.get("name", "")
+
+def get_valid_access_token(conn, config):
+  """Load persisted OAuth tokens, refresh access token, return (access_token, x_user_id) or (None, None)."""
+  row = db.get_oauth_session(conn) if conn else None
+  if not row or not row.get("refresh_token"): return None, None
+  http = http_client(config)
+  try:
+    token = refresh_access_token(http, config.client_id, config.client_secret, row["refresh_token"])
+  except Exception:
+    return None, None
+  access = token["access_token"]
+  refresh = token.get("refresh_token") or row["refresh_token"]
+  db.save_oauth_session(conn, row["x_user_id"], access, refresh)
+  return access, row["x_user_id"]
 
 def http_client(config):
   return config.http or httpx.Client(timeout=30)

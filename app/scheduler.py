@@ -5,10 +5,11 @@ load_env()
 from apscheduler.schedulers.background import BackgroundScheduler
 
 def run_job(db_path=None):
-  from app import db
+  from app import auth, db
   from app.fetch.runner import run_weekly_fetch
   conn = db.connect(db_path)
-  try: return run_weekly_fetch(conn)
+  auth_config = auth.AuthConfig.from_env()
+  try: return run_weekly_fetch(conn, auth_config=auth_config)
   finally: conn.close()
 
 def start_scheduler(db_path=None):

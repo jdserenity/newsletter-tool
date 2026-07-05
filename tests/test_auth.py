@@ -6,7 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app import auth
+from app import auth, db
 from app.main import create_app
 
 def test_pkce_challenge_is_s256_of_verifier():
@@ -81,11 +81,27 @@ def test_callback_exchanges_code_and_sets_session(auth_client, monkeypatch):
   r = auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
   assert r.status_code == 303
   assert r.headers["location"] == "/"
+  c = db.connect(auth_client.app.state.db_path)
+  row = db.get_oauth_session(c)
+  assert row["x_user_id"] == "99"
+  assert row["access_token"] == "user-at"
+  assert row["refresh_token"] == "user-rt"
   r = auth_client.get("/")
   assert r.status_code == 200
   assert "owner" in r.text.lower() or "@owner" in r.text
 
-def test_logout_clears_session(auth_client, monkeypatch):
+def test_add_account_follows_from_owner_session(auth_client, monkeypatch):
+  follow_calls = []
+  def fake_follow(conn, actions_client, access_token, owner_user_id, account, read_client=None):
+    follow_calls.append((access_token, owner_user_id, account["handle"]))
+  monkeypatch.setattr("app.main.follow_tracked_account", fake_follow)
+  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "user-at", "refresh_token": "user-rt"})
+  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "99", "username": "owner", "name": "Owner"})
+  login = auth_client.get("/auth/login/start", follow_redirects=False)
+  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+  auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
+  auth_client.post("/accounts", data={"handle": "newvoice"}, follow_redirects=True)
+  assert follow_calls == [("user-at", "99", "newvoice")]
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "at", "refresh_token": "rt"})
   monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "1", "username": "u", "name": "U"})
   login = auth_client.get("/auth/login/start", follow_redirects=False)

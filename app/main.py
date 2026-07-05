@@ -13,6 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app import auth, db
 from app.scheduler import start_scheduler
+from app.user_actions import UserActionsClient, follow_tracked_account
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -74,6 +75,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       except Exception as e:
         raise HTTPException(400, f"OAuth token exchange failed: {e}") from e
       auth.store_user_session(request, token, me)
+      db.save_oauth_session(conn(), me["id"], token["access_token"], token.get("refresh_token"))
       request.session.pop(auth.SESSION_OAUTH_STATE, None)
       request.session.pop(auth.SESSION_CODE_VERIFIER, None)
       return RedirectResponse("/", status_code=303)
@@ -92,10 +94,17 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     return render(request, "home.html", {"accounts": accounts, "digests": digests})
 
   @app.post("/accounts")
-  def add_account(handle: str = Form(...)):
+  def add_account(request: Request, handle: str = Form(...)):
     c = conn()
-    try: db.add_account(c, handle)
+    account_id = None
+    try: account_id = db.add_account(c, handle)
     except Exception: pass  # duplicate handle: just return to the list
+    if account_id and auth_config.enabled:
+      user = auth.session_user(request)
+      token = request.session.get(auth.SESSION_ACCESS)
+      if user and token:
+        account = db.get_account(c, account_id=account_id)
+        follow_tracked_account(c, UserActionsClient(), token, user["x_user_id"], account)
     return RedirectResponse("/", status_code=303)
 
   @app.post("/accounts/{account_id}/remove")
