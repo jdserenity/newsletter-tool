@@ -6,7 +6,7 @@
   <div>
     <a href="/accounts/{{ a.id }}"><strong>@{{ a.handle }}</strong></a>
     {% if a.display_name %}<span class="muted">{{ a.display_name }}</span>{% endif %}
-    <div class="muted">API cost to date: ${{ "%.3f"|format(a.total_cost) }}</div>
+    <div class="muted">API cost to date: ${{ "%.2f"|format(a.total_cost) }}</div>
   </div>
   <form class="inline" method="post" action="/accounts/{{ a.id }}/remove">
     <button class="ghost" type="submit">Remove</button>
@@ -28,7 +28,7 @@
 <div class="card row">
   <div>
     <a href="/digests/{{ d.id }}"><strong>@{{ d.handle }}</strong> — week of {{ d.week_start[:10] }}</a>
-    <div class="muted">{{ d.item_count }} items · cost ${{ "%.3f"|format(d.cost_usd) }}</div>
+    <div class="muted">{{ d.item_count }} items · cost ${{ "%.2f"|format(d.cost_usd) }}</div>
   </div>
   <span class="pill">digest</span>
 </div>
