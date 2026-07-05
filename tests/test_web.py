@@ -18,6 +18,10 @@ def test_home_empty(client):
   assert "Add account" in r.text
   assert "digest" not in r.text.lower()
   assert "tracked account" not in r.text.lower()
+  assert "log off without losing the signal" in r.text
+  assert 'class="site-brand"' in r.text
+  assert "min-height: 480px" in r.text
+  assert "flex-wrap: wrap" in r.text and "newsletter-toolbar" in r.text
 
 def test_add_account(client):
   r = client.post("/accounts", data={"handle": "@alice"}, follow_redirects=True)

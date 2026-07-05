@@ -17,12 +17,17 @@
   }
   .wrap { margin: 0; padding: 2rem 0 3rem; }
   header.site {
-    display: flex; justify-content: space-between; align-items: baseline;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;
     margin-bottom: 1.5rem; padding: 0 1.25rem;
   }
+  .site-brand { min-width: 0; }
   header.site h1 { font-size: 1.35rem; margin: 0; letter-spacing: -0.01em; }
   header.site h1 a { color: var(--ink); text-decoration: none; }
-  header.site .tag { color: var(--muted); font-size: 0.85rem; }
+  header.site .tag { color: var(--muted); font-size: 0.85rem; margin: 0.2rem 0 0; }
+  .site-user {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem;
+    flex-shrink: 0; text-align: right;
+  }
   h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 2rem 0 0.75rem; }
   .card {
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -64,40 +69,46 @@
     flex: 0 0 var(--card-width); width: var(--card-width);
     cursor: grab;
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-    display: flex; flex-direction: column; max-height: calc(100vh - 8rem); min-height: 320px;
+    display: flex; flex-direction: column; max-height: calc(100vh - 8rem); min-height: 480px;
+    overflow: hidden;
   }
   .newsletter-toolbar {
-    display: flex; flex-wrap: nowrap; align-items: center; gap: 0.6rem 0.85rem;
-    padding: 0.85rem 1rem; border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem;
+    padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border);
+    width: 100%; box-sizing: border-box; font-size: 0.78rem;
   }
-  .newsletter-identity { display: flex; align-items: baseline; gap: 0.5rem; white-space: nowrap; flex-shrink: 0; }
-  .newsletter-identity a { color: var(--ink); text-decoration: none; font-weight: 600; }
+  .newsletter-identity {
+    display: flex; align-items: baseline; gap: 0.35rem; min-width: 0;
+    white-space: nowrap; overflow: hidden;
+  }
+  .newsletter-identity a { color: var(--ink); text-decoration: none; font-weight: 600; flex-shrink: 0; }
   .newsletter-identity a:hover { color: var(--accent); }
-  .newsletter-meta { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; flex-shrink: 0; }
-  .api-cost { font-size: 0.85rem; font-weight: 600; color: var(--accent); }
+  .newsletter-identity .muted { overflow: hidden; text-overflow: ellipsis; }
+  .newsletter-meta { display: flex; align-items: center; gap: 0.35rem; white-space: nowrap; flex-shrink: 0; }
+  .api-cost { font-size: 0.75rem; font-weight: 600; color: var(--accent); }
   .rss-link {
-    display: inline-flex; align-items: center; gap: 0.25rem;
-    text-decoration: none; font-size: 0.8rem; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 0.2rem;
+    text-decoration: none; font-size: 0.72rem; color: var(--muted);
   }
-  .rss-link svg { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
-  .settings-row { display: flex; align-items: center; gap: 0.6rem; margin: 0; flex-shrink: 0; }
+  .rss-link svg { width: 12px; height: 12px; fill: currentColor; flex-shrink: 0; }
+  .settings-row { display: flex; align-items: center; gap: 0.35rem; margin: 0; flex-shrink: 0; }
   .toggle {
-    display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; white-space: nowrap;
-    font-size: 0.78rem; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 0.2rem; cursor: pointer; white-space: nowrap;
+    font-size: 0.68rem; color: var(--muted);
   }
   .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
   .toggle-rail {
-    position: relative; width: 42px; height: 26px; background: #d1d5db;
+    position: relative; width: 30px; height: 18px; background: #d1d5db;
     border-radius: 999px; transition: background 0.2s; flex-shrink: 0;
   }
   .toggle-thumb {
-    position: absolute; top: 2px; left: 2px; width: 22px; height: 22px;
+    position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
     background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     transition: transform 0.2s;
   }
   .toggle input:checked + .toggle-rail { background: #34c759; }
-  .toggle input:checked + .toggle-rail .toggle-thumb { transform: translateX(16px); }
-  .newsletter-body { padding: 0.75rem 1rem 1rem; overflow-y: auto; flex: 1; }
+  .toggle input:checked + .toggle-rail .toggle-thumb { transform: translateX(12px); }
+  .newsletter-body { padding: 0.75rem 1rem 1rem; overflow-y: auto; flex: 1; min-height: 0; }
   .week-label { margin-bottom: 0.5rem; }
 
   .add-card { justify-content: center; align-items: center; padding: 2rem 1.25rem; flex-shrink: 0; }
@@ -110,15 +121,17 @@
 <body>
 <div class="wrap">
   <header class="site">
-    <h1><a href="/">Newsletter Tool</a></h1>
-    <span class="tag">log off without losing the signal</span>
+    <div class="site-brand">
+      <h1><a href="/">Newsletter Tool</a></h1>
+      <p class="tag">log off without losing the signal</p>
+    </div>
+    {% if user %}
+    <div class="site-user">
+      <span class="muted">Signed in as <strong>@{{ user.username }}</strong></span>
+      <form class="inline" method="post" action="/auth/logout"><button class="ghost" type="submit">Sign out</button></form>
+    </div>
+    {% endif %}
   </header>
-  {% if user %}
-  <p class="muted row" style="margin-top:-1.25rem;margin-bottom:1.5rem;">
-    Signed in as <strong>@{{ user.username }}</strong>
-    <form class="inline" method="post" action="/auth/logout"><button class="ghost" type="submit">Sign out</button></form>
-  </p>
-  {% endif %}
   {% block content %}{% endblock %}
 </div>
 </body>
