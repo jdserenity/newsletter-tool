@@ -3,7 +3,7 @@
 Hard-won lessons and context that should survive across agent sessions.
 
 ## X API pricing (2026-07)
-Pay-per-use is the default for new developers. Legacy Basic/Pro subscriptions are being migrated away. Budget using ~$0.005/post read and ~$0.010/user lookup. X dedupes identical resource reads within 24h (only charged once).
+Pay-per-use is the default for new developers. Legacy Basic/Pro subscriptions are being migrated away. Budget using ~$0.005/post read and ~$0.010/user lookup. X dedupes identical resource reads within 24h (only charged once). The app mirrors that rule when recording costs: tweet reads bill only for tweet IDs not fetched in the last 24h; repeat weekly fetches within 24h add $0 for already-seen posts.
 
 ## Database path
 Accounts, tweets, and API cost rows live in one SQLite file. The path comes from `DATABASE_PATH` in `.env` (loaded on app import). If unset, the default is `~/.local/share/newsletter-tool/newsletter.db` — outside any git checkout so all worktrees see the same data.
