@@ -56,3 +56,6 @@ news-db-status
 Prints DB path, current newsletter week, per-account tweet/edition counts, API cost, like-queue size, and OAuth status.
 
 `news-manual-fetch` prints the database path it uses at startup — compare that to the path in `news-db-status` if the web UI and CLI ever look out of sync (e.g. dev server started before `.env` was saved).
+
+## Follow and like need OAuth in the database
+Likes drain in a background thread (or via `news-manual-fetch`) using tokens stored in the `oauth_session` table, not the browser cookie alone. Running `news-manual-fetch` can enqueue likes without OAuth saved — `news-db-status` then shows queued likes with `OAuth no`, and nothing gets liked until you sign in via the web app once (homepage load copies session tokens into the DB and resumes the queue). Follow on add-account uses the same refreshed owner token path.

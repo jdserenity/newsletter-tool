@@ -48,9 +48,12 @@ def fetch():
     if not results:
       print("No active accounts.")
     elif queued:
-      print(f"Draining {queued} queued likes (paced; may take a while)...")
-      liked = drain_like_queue(conn, auth_config=auth.AuthConfig.from_env(), actions_client=UserActionsClient())
-      print(f"Liked {liked} tweets.")
+      if not db.get_oauth_session(conn):
+        print(f"{queued} likes queued but OAuth is not saved — sign in via the web app once, then re-run or open the homepage.")
+      else:
+        print(f"Draining {queued} queued likes (paced; may take a while)...")
+        liked = drain_like_queue(conn, auth_config=auth.AuthConfig.from_env(), actions_client=UserActionsClient())
+        print(f"Liked {liked} tweets.")
   finally:
     conn.close()
 

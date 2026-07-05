@@ -17,6 +17,7 @@ def test_fetch_runs_weekly_fetch_and_drains_queue(monkeypatch, capsys):
   monkeypatch.setattr("app.db.resolve_db_path", lambda: "/tmp/news.db")
   monkeypatch.setattr("app.db.connect", lambda path=None: FakeConn())
   monkeypatch.setattr("app.db.like_queue_size", lambda conn: 2)
+  monkeypatch.setattr("app.db.get_oauth_session", lambda conn: {"refresh_token": "rt"})
   monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn: (calls.__setitem__("fetch", calls["fetch"] + 1) or [("alice", 0.015)]))
   monkeypatch.setattr("app.user_actions.drain_like_queue", lambda *a, **k: (calls.__setitem__("drain", calls["drain"] + 1) or 2))
   fetch()
@@ -25,6 +26,20 @@ def test_fetch_runs_weekly_fetch_and_drains_queue(monkeypatch, capsys):
   assert "alice: $0.015" in out
   assert "Draining 2 queued likes" in out
   assert "Liked 2 tweets." in out
+
+def test_fetch_warns_when_likes_queued_without_oauth(monkeypatch, capsys):
+  class FakeConn:
+    def close(self): pass
+  monkeypatch.setattr("app.env.load_env", lambda: None)
+  monkeypatch.setattr("app.db.resolve_db_path", lambda: "/tmp/news.db")
+  monkeypatch.setattr("app.db.connect", lambda path=None: FakeConn())
+  monkeypatch.setattr("app.db.like_queue_size", lambda conn: 3)
+  monkeypatch.setattr("app.db.get_oauth_session", lambda conn: None)
+  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn: [("alice", 0.015)])
+  fetch()
+  out = capsys.readouterr().out
+  assert "OAuth is not saved" in out
+  assert "Draining 3" not in out
 
 def test_fetch_reports_empty_accounts(monkeypatch, capsys):
   class FakeConn:

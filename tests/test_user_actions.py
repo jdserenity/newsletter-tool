@@ -114,6 +114,35 @@ def test_resume_like_drain_if_needed_starts_when_queue_nonempty(tmp_path, monkey
   resume_like_drain_if_needed(path)
   assert started == [path]
 
+def test_persist_session_oauth_writes_db(conn):
+  class Req:
+    session = {
+      auth.SESSION_USER_ID: "99", auth.SESSION_ACCESS: "at", auth.SESSION_REFRESH: "rt",
+    }
+  auth.persist_session_oauth(conn, Req())
+  row = db.get_oauth_session(conn)
+  assert row["x_user_id"] == "99"
+  assert row["access_token"] == "at"
+  assert row["refresh_token"] == "rt"
+
+def test_persist_session_oauth_skips_incomplete_session(conn):
+  class Req:
+    session = {auth.SESSION_ACCESS: "at"}
+  auth.persist_session_oauth(conn, Req())
+  assert db.get_oauth_session(conn) is None
+
+def test_owner_access_token_refreshes_from_persisted_session(conn, monkeypatch):
+  class Req:
+    session = {
+      auth.SESSION_USER_ID: "99", auth.SESSION_ACCESS: "old-at", auth.SESSION_REFRESH: "rt",
+    }
+  monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
+    "access_token": "new-at", "refresh_token": "rt", "expires_in": 7200})
+  cfg = auth.AuthConfig.from_env(enabled=True)
+  cfg.client_id = "cid"; cfg.client_secret = "sec"
+  token, uid = auth.owner_access_token(conn, Req(), cfg)
+  assert token == "new-at"; assert uid == "99"
+
 def test_resume_like_drain_if_needed_noop_when_queue_empty(tmp_path, monkeypatch):
   path = str(tmp_path / "empty.db")
   db.connect(path).close()

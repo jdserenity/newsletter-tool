@@ -112,6 +112,25 @@ def store_user_session(request, token, me):
   request.session[SESSION_USERNAME] = me["username"]
   request.session[SESSION_NAME] = me.get("name", "")
 
+def persist_session_oauth(conn, request):
+  """Copy browser session tokens into the DB so background jobs can refresh access."""
+  uid = request.session.get(SESSION_USER_ID)
+  access = request.session.get(SESSION_ACCESS)
+  refresh = request.session.get(SESSION_REFRESH)
+  if uid and access and refresh:
+    db.save_oauth_session(conn, uid, access, refresh)
+    return True
+  return False
+
+def owner_access_token(conn, request, config):
+  """Fresh access token for owner actions: DB refresh first, else browser session."""
+  persist_session_oauth(conn, request)
+  access, uid = get_valid_access_token(conn, config)
+  if access and uid: return access, uid
+  if request.session.get(SESSION_ACCESS) and request.session.get(SESSION_USER_ID):
+    return request.session[SESSION_ACCESS], request.session[SESSION_USER_ID]
+  return None, None
+
 def get_valid_access_token(conn, config):
   """Load persisted OAuth tokens, refresh access token, return (access_token, x_user_id) or (None, None)."""
   row = db.get_oauth_session(conn) if conn else None

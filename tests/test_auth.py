@@ -95,6 +95,8 @@ def test_add_account_follows_from_owner_session(auth_client, monkeypatch):
   def fake_follow(conn, actions_client, access_token, owner_user_id, account, read_client=None):
     follow_calls.append((access_token, owner_user_id, account["handle"]))
   monkeypatch.setattr("app.main.follow_tracked_account", fake_follow)
+  monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
+    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "user-at", "refresh_token": "user-rt"})
   monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "99", "username": "owner", "name": "Owner"})
   login = auth_client.get("/auth/login/start", follow_redirects=False)
@@ -102,6 +104,23 @@ def test_add_account_follows_from_owner_session(auth_client, monkeypatch):
   auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
   auth_client.post("/accounts", data={"handle": "newvoice"}, follow_redirects=True)
   assert follow_calls == [("user-at", "99", "newvoice")]
+
+def test_home_persists_oauth_and_resumes_like_drain(auth_client, monkeypatch):
+  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "user-at", "refresh_token": "user-rt"})
+  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "99", "username": "owner", "name": "Owner"})
+  login = auth_client.get("/auth/login/start", follow_redirects=False)
+  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+  auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
+  c = db.connect(auth_client.app.state.db_path)
+  db.enqueue_like(c, "42")
+  started = []
+  monkeypatch.setattr("app.main.resume_like_drain_if_needed", lambda p: started.append(p))
+  auth_client.get("/")
+  row = db.get_oauth_session(c)
+  assert row["refresh_token"] == "user-rt"
+  assert started == [auth_client.app.state.db_path]
+
+def test_logout_clears_session(auth_client, monkeypatch):
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "at", "refresh_token": "rt"})
   monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "1", "username": "u", "name": "U"})
   login = auth_client.get("/auth/login/start", follow_redirects=False)
