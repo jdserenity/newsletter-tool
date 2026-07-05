@@ -31,8 +31,8 @@ def fetch_account_week(conn, client, account, week_start, week_end):
   return cost
 
 def run_weekly_fetch(conn, client=None, now=None, db_path=None):
-  """Fetch + build digests for all active accounts. Returns list of (handle, cost)."""
-  from app.digest import build_digest
+  """Fetch + build newsletters for all active accounts. Returns list of (handle, cost)."""
+  from app.newsletter import build_newsletter
   from app.user_actions import enqueue_digest_likes, start_like_drain
   client = client or XClient()
   week_start, week_end = week_bounds(now)
@@ -41,8 +41,8 @@ def run_weekly_fetch(conn, client=None, now=None, db_path=None):
     cost = fetch_account_week(conn, client, account, week_start, week_end)
     account = db.get_account(conn, account_id=account["id"])
     tweets = db.tweets_for_week(conn, account["id"], week_start, week_end)
-    items = build_digest(tweets, account)
-    db.save_digest(conn, account["id"], week_start, week_end, items, cost)
+    items = build_newsletter(tweets, account)
+    db.save_edition(conn, account["id"], week_start, week_end, items, cost)
     enqueued += enqueue_digest_likes(conn, items)
     results.append((account["handle"], cost))
   if db_path and enqueued > 0: start_like_drain(db_path)

@@ -1,4 +1,4 @@
-"""APScheduler weekly job: Monday 06:00 UTC, fetch last complete week and build digests."""
+"""APScheduler weekly job: Monday 06:00 UTC, fetch last complete week and build newsletters."""
 from app.env import load_env
 load_env()
 

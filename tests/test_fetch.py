@@ -53,14 +53,14 @@ def test_fetch_records_cost_and_stores_tweets(conn):
   assert {t["kind"] for t in stored} == {"post", "quote"}
   assert db.get_account(conn, account_id=aid)["x_user_id"] == "111"  # cached, not re-fetched next week
 
-def test_run_weekly_fetch_builds_digests(conn):
+def test_run_weekly_fetch_builds_newsletters(conn):
   db.add_account(conn, "alice")
   client = XClient(bearer_token="t", http=FakeHttp(TWEETS))
   now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)  # week fetched: Jun 29 - Jul 6, covers TWEETS
   results = run_weekly_fetch(conn, client=client, now=now)
   assert len(results) == 1
-  digests = db.list_digests(conn)
-  assert len(digests) == 1; assert digests[0]["item_count"] == 2  # post + quote (quotes on on default)
+  editions = db.list_editions(conn)
+  assert len(editions) == 1; assert editions[0]["item_count"] == 2  # post + quote (quotes on by default)
 
 def test_run_weekly_fetch_enqueues_likes_and_starts_drain(conn, monkeypatch):
   started = []
