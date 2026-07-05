@@ -5,8 +5,9 @@ Personal tool that turns selected X accounts into clean weekly digests, viewable
 ## Run
 
 ```bash
-pip install -e ".[dev]"
+./scripts/setup.sh
 cp .env.example .env   # then set X_BEARER_TOKEN in .env
+source .venv/bin/activate
 news-dev
 ```
 

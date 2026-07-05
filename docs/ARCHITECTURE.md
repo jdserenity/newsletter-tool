@@ -37,8 +37,9 @@ Single repo, single FastAPI app:
 
 ## Run locally
 ```bash
-pip install -e ".[dev]"
-cp .env.example .env   # set X_BEARER_TOKEN in .env (loaded via python-dotenv)
+./scripts/setup.sh
+cp .env.example .env   # set X_BEARER_TOKEN in .env (loaded via python-dotenv on app import)
+source .venv/bin/activate
 news-dev
 pytest
 ```
