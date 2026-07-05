@@ -81,6 +81,15 @@ def test_quoted_for_display_strips_tco_and_includes_media():
   assert q["url"] == "https://x.com/i/status/999"
   assert len(q["media"]) == 1
 
+def test_clean_tweet_text_strips_quote_tco():
+  raw = {
+    "referenced_tweets": [{"type": "quoted", "id": "999"}],
+    "quoted_tweet": {"id": "999", "text": "original"},
+    "entities": {"urls": [{"start": 11, "end": 33, "url": "https://t.co/abc",
+                           "expanded_url": "https://twitter.com/bob/status/999"}]},
+  }
+  assert clean_tweet_text("my take on https://t.co/abc", raw) == "my take on"
+
 def test_build_newsletter_includes_quoted_block():
   tweet = {"tweet_id": "2", "kind": "quote", "text": "my take", "created_at": QUOTE_RAW["created_at"],
            "raw_json": json.dumps(QUOTE_RAW)}

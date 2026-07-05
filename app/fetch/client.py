@@ -18,12 +18,19 @@ def count_post_reads(body):
   for t in (body.get("includes") or {}).get("tweets") or []: ids.add(t["id"])
   return len(ids)
 
+def _media_keys(tweet):
+  keys = list((tweet.get("attachments") or {}).get("media_keys") or [])
+  if keys: return keys
+  for u in (tweet.get("entities") or {}).get("urls") or []:
+    mk = u.get("media_key")
+    if mk and mk not in keys: keys.append(mk)
+  return keys
+
 def attach_media(tweets, includes):
   """Merge expanded media objects from includes.media onto each tweet as media_expanded."""
   by_key = {m["media_key"]: m for m in (includes or {}).get("media", [])}
   for t in tweets:
-    keys = (t.get("attachments") or {}).get("media_keys") or []
-    t["media_expanded"] = [by_key[k] for k in keys if k in by_key]
+    t["media_expanded"] = [by_key[k] for k in _media_keys(t) if k in by_key]
   return tweets
 
 def attach_quoted(tweets, includes):
@@ -35,7 +42,7 @@ def attach_quoted(tweets, includes):
     if not ref: continue
     qt = by_id.get(ref["id"])
     if not qt: continue
-    keys = (qt.get("attachments") or {}).get("media_keys") or []
+    keys = _media_keys(qt)
     t["quoted_tweet"] = {**qt, "media_expanded": [by_key[k] for k in keys if k in by_key]}
   return tweets
 

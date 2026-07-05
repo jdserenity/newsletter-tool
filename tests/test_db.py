@@ -52,6 +52,15 @@ def test_save_tweets_dedupes(conn):
   rows = db.tweets_for_week(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z")
   assert len(rows) == 1
 
+def test_save_tweets_updates_raw_json_on_refetch(conn):
+  aid = db.add_account(conn, "alice")
+  t = {"id": "1", "text": "hi", "created_at": "2026-06-30T12:00:00Z"}
+  db.save_tweets(conn, aid, [t])
+  t2 = {**t, "media_expanded": [{"type": "photo", "url": "https://pbs.twimg.com/x.jpg"}]}
+  db.save_tweets(conn, aid, [t2])
+  raw = db.tweets_for_week(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z")[0]["raw_json"]
+  assert "media_expanded" in raw
+
 def test_cost_for_account(conn):
   aid = db.add_account(conn, "alice")
   db.record_api_call(conn, aid, "users/:id/tweets", 10, 0.05)

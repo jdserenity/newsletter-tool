@@ -2,22 +2,41 @@
 import json
 import re
 
+def _quoted_id(raw):
+  if raw.get("quoted_tweet", {}).get("id"): return raw["quoted_tweet"]["id"]
+  return next((r["id"] for r in (raw.get("referenced_tweets") or []) if r.get("type") == "quoted"), None)
+
 def _is_media_tco(url_entity, raw):
   """True when a t.co entry in entities points at attached tweet media."""
   if url_entity.get("media_key"): return True
   exp = url_entity.get("expanded_url") or ""
-  if "pic.twitter.com" in exp or "/photo/" in exp: return True
-  keys = set((raw.get("attachments") or {}).get("media_keys") or [])
+  if "pic.twitter.com" in exp or "/photo/" in exp or "/video/" in exp: return True
+  keys = set(_media_keys(raw))
   return bool(url_entity.get("media_key") in keys)
 
+def _media_keys(raw):
+  keys = list((raw.get("attachments") or {}).get("media_keys") or [])
+  for u in (raw.get("entities") or {}).get("urls") or []:
+    mk = u.get("media_key")
+    if mk and mk not in keys: keys.append(mk)
+  return keys
+
+def _is_quote_tco(url_entity, raw):
+  """True when a t.co entry points at the quoted tweet we render inline."""
+  qid = _quoted_id(raw)
+  if not qid: return False
+  exp = url_entity.get("expanded_url") or ""
+  return qid in exp
+
 def clean_tweet_text(text, raw):
-  """Remove t.co short links that point at inline media we render separately."""
+  """Remove t.co short links replaced by inline media or quoted blocks."""
   entities = raw.get("entities") or {}
-  spans = [u for u in entities.get("urls") or [] if _is_media_tco(u, raw) and "start" in u and "end" in u]
+  spans = [u for u in entities.get("urls") or []
+           if ("start" in u and "end" in u) and (_is_media_tco(u, raw) or _is_quote_tco(u, raw))]
   out = text
   for u in sorted(spans, key=lambda x: x["start"], reverse=True):
     out = out[:u["start"]] + out[u["end"]:]
-  if (raw.get("media_expanded") or []) and "t.co/" in out:
+  if ((_media_keys(raw) and (raw.get("media_expanded") or [])) or _quoted_id(raw)) and "t.co/" in out:
     out = re.sub(r"\s*https://t\.co/\w+\s*$", "", out)
   return re.sub(r"  +", " ", out).strip()
 

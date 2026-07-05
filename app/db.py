@@ -122,7 +122,12 @@ def set_account_identity(conn, account_id, x_user_id, display_name):
 def save_tweets(conn, account_id, tweets):
   for t in tweets:
     conn.execute(
-      "INSERT OR IGNORE INTO tweets (account_id, tweet_id, kind, text, created_at, raw_json) VALUES (?, ?, ?, ?, ?, ?)",
+      """INSERT INTO tweets (account_id, tweet_id, kind, text, created_at, raw_json)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(tweet_id) DO UPDATE SET
+           account_id = excluded.account_id, kind = excluded.kind, text = excluded.text,
+           created_at = excluded.created_at, raw_json = excluded.raw_json,
+           fetched_at = datetime('now')""",
       (account_id, t["id"], t.get("kind", "post"), t["text"], t["created_at"], json.dumps(t)))
   conn.commit()
 
