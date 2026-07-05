@@ -26,7 +26,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Approximate unit costs: $0.005 per post read, $0.010 per user read. Post reads capped at 2M/month.
 - Same resource requested twice within 24 hours is charged once (X deduplication).
 - **App credentials (server):** `X_BEARER_TOKEN` — used by the weekly fetch job and other read-only API calls that act as the app, not as a logged-in user.
-- **User OAuth 2.0 (browser):** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET` — OAuth 2.0 Authorization Code with PKCE. All web routes except `/auth/*` require a signed-in X user session. Scopes requested at sign-in: `users.read`, `tweet.read`, `like.write`, `follows.write`, `offline.access` (last three reserved for upcoming like/follow actions). Bearer-token fetch and scheduling do not use the user session.
+- **User OAuth 2.0 (browser):** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET` — OAuth 2.0 Authorization Code with PKCE. All web routes except `/auth/*` require a signed-in X user session. Default scopes at sign-in: `users.read`, `offline.access`. Optional `X_OAUTH_SCOPES` (space-separated) for extra permissions when like/follow ship. Bearer-token fetch and scheduling do not use the user session.
 
 ## System layout
 Single repo, single FastAPI app:

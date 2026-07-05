@@ -11,8 +11,8 @@ AUTH_URL = "https://x.com/i/oauth2/authorize"
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
 USER_ME_URL = "https://api.x.com/2/users/me"
 
-# Scopes for sign-in plus future like/follow actions on digest content.
-DEFAULT_SCOPES = ("users.read", "tweet.read", "like.write", "follows.write", "offline.access")
+# Sign-in only; add tweet.read like.write follows.write via X_OAUTH_SCOPES when those features ship.
+DEFAULT_SCOPES = ("users.read", "offline.access")
 
 SESSION_ACCESS = "access_token"
 SESSION_REFRESH = "refresh_token"
@@ -34,12 +34,15 @@ class AuthConfig:
 
   @classmethod
   def from_env(cls, enabled=True, http=None):
+    scopes_env = os.environ.get("X_OAUTH_SCOPES", "").strip()
+    scopes = tuple(s for s in scopes_env.split() if s) or DEFAULT_SCOPES
     return cls(
       enabled=enabled,
       client_id=os.environ.get("X_CLIENT_ID", ""),
       client_secret=os.environ.get("X_CLIENT_SECRET", ""),
       callback_url=os.environ.get("X_OAUTH_CALLBACK_URL", "http://127.0.0.1:8000/auth/callback"),
       session_secret=os.environ.get("SESSION_SECRET", ""),
+      scopes=scopes,
       http=http,
     )
 
