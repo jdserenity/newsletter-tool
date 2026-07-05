@@ -16,7 +16,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 
 ## Tech stack
 - Backend: Python + FastAPI — one app serves web pages, RSS, and the weekly fetch.
-- Database: SQLite (single file under `data/newsletter.db`). Raw API responses cached in the DB so digests can be rebuilt without refetching.
+- Database: SQLite (single file). Path from `DATABASE_PATH` in `.env` (or the process environment on the VPS). Default: `~/.local/share/newsletter-tool/newsletter.db` — outside the repo so git worktrees share one database. Raw API responses cached in the DB so digests can be rebuilt without refetching.
 - Frontend: server-rendered Jinja2 templates; htmx only if needed. No JS framework, no build step.
 - Scheduling: APScheduler inside the app (weekly fetch, Monday 06:00 UTC). Can be reduced to cron later.
 - Hosting: owner's VPS.
@@ -38,11 +38,11 @@ Single repo, single FastAPI app:
 ## Run locally
 ```bash
 ./scripts/setup.sh
-cp .env.example .env   # set X_BEARER_TOKEN in .env (loaded via python-dotenv on app import)
+cp .env.example .env   # set X_BEARER_TOKEN; optional DATABASE_PATH (see .env.example)
 source venv/bin/activate
 news-dev
 pytest
 ```
 
 ## Deploy (VPS)
-Not yet documented in detail. App runs as a single uvicorn process; SQLite file lives on disk; set `X_BEARER_TOKEN` in the environment; reverse-proxy the subdomain to the app port.
+App runs as a single uvicorn process. Set `X_BEARER_TOKEN` and `DATABASE_PATH` (e.g. `/var/lib/newsletter-tool/newsletter.db`) in the environment; reverse-proxy the subdomain to the app port.

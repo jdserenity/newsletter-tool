@@ -16,16 +16,17 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 def create_app(db_path=None, with_scheduler=True):
+  path = str(db.resolve_db_path(db_path))
   @asynccontextmanager
   async def lifespan(app):
-    scheduler = start_scheduler(db_path) if with_scheduler else None
+    scheduler = start_scheduler(path) if with_scheduler else None
     yield
     if scheduler: scheduler.shutdown(wait=False)
 
   app = FastAPI(title="newsletter-tool", lifespan=lifespan)
-  app.state.db_path = db_path
+  app.state.db_path = path
 
-  def conn(): return db.connect(app.state.db_path)
+  def conn(): return db.connect(path)
 
   @app.get("/", response_class=HTMLResponse)
   def home(request: Request):
@@ -82,4 +83,4 @@ def create_app(db_path=None, with_scheduler=True):
 
   return app
 
-app = create_app()
+app = create_app()  # path from DATABASE_PATH env or ~/.local/share/newsletter-tool/newsletter.db
