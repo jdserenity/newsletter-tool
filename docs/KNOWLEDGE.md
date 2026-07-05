@@ -27,3 +27,9 @@ Run from repo root: `pytest` (or `venv/bin/python -m pytest`). Web tests use `Te
 ```bash
 python -c "from app.scheduler import run_job; print(run_job())"
 ```
+
+## X OAuth sign-in (web app)
+- Callback URL in `.env` (`X_OAUTH_CALLBACK_URL`) must match a Callback URL in the X Developer Console **exactly** (including `http` vs `https` and port).
+- `SESSION_SECRET` signs the browser cookie; generate with `openssl rand -hex 32` if you need a value.
+- Local dev default callback: `http://127.0.0.1:8000/auth/callback` — register that URL in the console for the app.
+- Web tests disable auth (`auth_enabled=False`); auth behavior is covered in `tests/test_auth.py`.
