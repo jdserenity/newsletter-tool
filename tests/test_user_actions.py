@@ -5,7 +5,7 @@ from app import auth, db
 from app.fetch.client import XClient
 from app.user_actions import (
   UserActionsClient, drain_like_queue, enqueue_digest_likes, follow_tracked_account,
-  like_delay_seconds, resolve_target_x_user_id,
+  like_delay_seconds, resolve_target_x_user_id, resume_like_drain_if_needed,
 )
 
 class FakeResponse:
@@ -95,6 +95,32 @@ def test_drain_like_queue_stops_without_oauth(conn):
   db.enqueue_like(conn, "42")
   assert drain_like_queue(conn, auth_config=auth.AuthConfig.from_env(enabled=False)) == 0
   assert db.like_queue_size(conn) == 1
+
+def test_drain_like_queue_skips_already_liked_still_in_queue(conn, monkeypatch):
+  db.save_oauth_session(conn, "99", "at", "rt")
+  db.mark_tweet_liked(conn, "42"); db.enqueue_like(conn, "42"); db.enqueue_like(conn, "43")
+  monkeypatch.setattr("app.auth.refresh_access_token", lambda *a, **k: {"access_token": "at", "refresh_token": "rt"})
+  http = FakeHttp()
+  liked = drain_like_queue(conn, actions_client=UserActionsClient(http=http), sleep=lambda s: None)
+  assert liked == 1
+  assert [p[2]["tweet_id"] for p in http.posts] == ["43"]
+  assert db.like_queue_size(conn) == 0
+
+def test_resume_like_drain_if_needed_starts_when_queue_nonempty(tmp_path, monkeypatch):
+  path = str(tmp_path / "resume.db")
+  c = db.connect(path); db.enqueue_like(c, "99"); c.close()
+  started = []
+  monkeypatch.setattr("app.user_actions.start_like_drain", lambda p: started.append(p))
+  resume_like_drain_if_needed(path)
+  assert started == [path]
+
+def test_resume_like_drain_if_needed_noop_when_queue_empty(tmp_path, monkeypatch):
+  path = str(tmp_path / "empty.db")
+  db.connect(path).close()
+  started = []
+  monkeypatch.setattr("app.user_actions.start_like_drain", lambda p: started.append(p))
+  resume_like_drain_if_needed(path)
+  assert started == []
 
 def test_get_valid_access_token_refreshes_and_persists(conn, monkeypatch):
   db.save_oauth_session(conn, "99", "old-at", "rt")

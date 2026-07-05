@@ -71,6 +71,8 @@ def drain_like_queue(conn, auth_config=None, actions_client=None, sleep=time.sle
   while True:
     tweet_id = db.peek_like_queue(conn)
     if not tweet_id: break
+    if db.is_tweet_liked(conn, tweet_id):
+      db.dequeue_like(conn, tweet_id); continue
     if not first: sleep(like_delay_seconds())
     first = False
     access_token, owner_id = auth.get_valid_access_token(conn, auth_config) if auth_config.enabled else (None, None)
