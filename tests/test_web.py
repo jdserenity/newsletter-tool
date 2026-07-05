@@ -19,14 +19,38 @@ def test_home_empty(client):
   assert "digest" not in r.text.lower()
   assert "tracked account" not in r.text.lower()
 
-def test_add_and_remove_account(client):
+def test_add_account(client):
   r = client.post("/accounts", data={"handle": "@alice"}, follow_redirects=True)
-  assert "@alice" in r.text
+  assert r.status_code == 200
+  assert 'href="https://x.com/alice"' in r.text
   assert "hello" not in r.text  # no edition yet
+
+def test_remove_account_via_api(client):
+  client.post("/accounts", data={"handle": "@alice"})
   c = db.connect(client.db_path)
   aid = db.get_account(c, handle="alice")["id"]
   r = client.post(f"/accounts/{aid}/remove", follow_redirects=True)
   assert "@alice" not in r.text
+
+def test_home_multiple_accounts_shows_carousel_and_add_card(client):
+  client.post("/accounts", data={"handle": "alice"})
+  client.post("/accounts", data={"handle": "bob"})
+  r = client.get("/")
+  assert r.text.count('href="https://x.com/') == 2
+  assert 'class="newsletter-card add-card"' in r.text
+  assert 'id="newsletter-carousel"' in r.text
+  assert "overflow-x: auto" in r.text
+
+def test_home_has_no_remove_button(client):
+  client.post("/accounts", data={"handle": "alice"})
+  r = client.get("/")
+  assert "/remove" not in r.text
+
+def test_rss_link_has_icon(client):
+  client.post("/accounts", data={"handle": "alice"})
+  r = client.get("/")
+  assert 'class="rss-link"' in r.text
+  assert "<svg" in r.text
 
 def test_settings_roundtrip(client):
   client.post("/accounts", data={"handle": "alice"})
