@@ -12,7 +12,7 @@ Replies and retweets can be excluded at the API via the `exclude` parameter — 
 `week_bounds()` in `app/fetch/runner.py` uses the most recent complete Monday-to-Monday window in UTC.
 
 ## Tests
-Run from repo root: `pytest` (or `.venv/bin/python -m pytest`). Web tests use `TestClient` with scheduler disabled. Fetch tests use a fake HTTP client — no real API calls in CI.
+Run from repo root: `pytest` (or `venv/bin/python -m pytest`). Web tests use `TestClient` with scheduler disabled. Fetch tests use a fake HTTP client — no real API calls in CI.
 
 ## Manual weekly fetch
 ```bash

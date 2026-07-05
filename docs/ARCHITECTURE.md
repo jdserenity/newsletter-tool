@@ -39,7 +39,7 @@ Single repo, single FastAPI app:
 ```bash
 ./scripts/setup.sh
 cp .env.example .env   # set X_BEARER_TOKEN in .env (loaded via python-dotenv on app import)
-source .venv/bin/activate
+source venv/bin/activate
 news-dev
 pytest
 ```
