@@ -72,12 +72,9 @@
   var carousel = document.getElementById('newsletter-carousel');
   if (carousel) {
     var down = false, startX = 0, scrollLeft = 0;
-    var dragTarget = function(e) {
-      return e.target.closest('a, button, input, label, .toggle, .newsletter-body');
-    };
     carousel.addEventListener('mousedown', function(e) {
-      if (dragTarget(e)) return;
-      down = true; startX = e.pageX; scrollLeft = carousel.scrollLeft;
+      if (e.target.closest('a, button, input, label, select, textarea')) return;
+      down = true; startX = e.clientX; scrollLeft = carousel.scrollLeft;
       carousel.classList.add('dragging');
     });
     document.addEventListener('mouseup', function() {
@@ -87,7 +84,7 @@
     document.addEventListener('mousemove', function(e) {
       if (!down) return;
       e.preventDefault();
-      carousel.scrollLeft = scrollLeft - (e.pageX - startX);
+      carousel.scrollLeft = scrollLeft - (e.clientX - startX);
     });
   }
 
