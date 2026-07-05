@@ -8,7 +8,7 @@ def run_job(db_path=None):
   from app import db
   from app.fetch.runner import run_weekly_fetch
   conn = db.connect(db_path)
-  try: return run_weekly_fetch(conn)
+  try: return run_weekly_fetch(conn, db_path=db_path)
   finally: conn.close()
 
 def start_scheduler(db_path=None):

@@ -113,6 +113,12 @@
     <h1><a href="/">Newsletter Tool</a></h1>
     <span class="tag">log off without losing the signal</span>
   </header>
+  {% if user %}
+  <p class="muted row" style="margin-top:-1.25rem;margin-bottom:1.5rem;">
+    Signed in as <strong>@{{ user.username }}</strong>
+    <form class="inline" method="post" action="/auth/logout"><button class="ghost" type="submit">Sign out</button></form>
+  </p>
+  {% endif %}
   {% block content %}{% endblock %}
 </div>
 </body>

@@ -6,7 +6,7 @@ from app.main import create_app
 
 @pytest.fixture
 def client(tmp_path):
-  app = create_app(db_path=str(tmp_path / "test.db"), with_scheduler=False)
+  app = create_app(db_path=str(tmp_path / "test.db"), with_scheduler=False, auth_enabled=False)
   with TestClient(app) as c:
     c.db_path = str(tmp_path / "test.db")
     yield c

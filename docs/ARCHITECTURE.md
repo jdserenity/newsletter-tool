@@ -26,7 +26,9 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Pay-per-use credits in the Developer Console; legacy subscription tiers are deprecated for new developers.
 - Approximate unit costs: $0.005 per post read, $0.010 per user read. Post reads capped at 2M/month.
 - Same resource requested twice within 24 hours is charged once (X deduplication).
-- Uses X API v2. Auth: `X_BEARER_TOKEN` environment variable.
+- **App credentials (server):** `X_BEARER_TOKEN` — used by the weekly fetch job and other read-only API calls that act as the app, not as a logged-in user.
+- **User OAuth 2.0 (browser):** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET` — OAuth 2.0 Authorization Code with PKCE. All web routes except `/auth/*` require a signed-in X user session. Scopes at sign-in: `users.read`, `tweet.read`, `like.write`, `follows.write`, `offline.access`. Optional `X_OAUTH_SCOPES` overrides that list. Bearer-token fetch and scheduling do not use the user session.
+- **Owner actions on X:** Adding a tracked account triggers a follow from the signed-in owner account (POST follow; no pre-check of the following list). After each weekly newsletter is built, tweets that made it into the edition are queued and a background thread drains the queue: first like immediately, then ~1 minute ± 1–20s between each until done. OAuth tokens persist in `oauth_session` (refreshed while draining). Already-liked tweet IDs are stored in `liked_tweets`; pending likes live in `like_queue`. On app startup, a non-empty queue resumes draining.
 
 ## System layout
 Single repo, single FastAPI app:
@@ -39,11 +41,11 @@ Single repo, single FastAPI app:
 ## Run locally
 ```bash
 ./scripts/setup.sh
-cp .env.example .env   # set X_BEARER_TOKEN; optional DATABASE_PATH (see .env.example)
+cp .env.example .env   # set X_BEARER_TOKEN and OAuth vars (see .env.example)
 source venv/bin/activate
 news-dev
 pytest
 ```
 
 ## Deploy (VPS)
-App runs as a single uvicorn process. Set `X_BEARER_TOKEN` and `DATABASE_PATH` (e.g. `/var/lib/newsletter-tool/newsletter.db`) in the environment; reverse-proxy the subdomain to the app port.
+App runs as a single uvicorn process. Set `X_BEARER_TOKEN`, OAuth vars, and `DATABASE_PATH` (e.g. `/var/lib/newsletter-tool/newsletter.db`) in the environment; register the production callback URL in the X Developer Console (`https://your-subdomain.example.com/auth/callback`); reverse-proxy the subdomain to the app port.

@@ -62,6 +62,16 @@ def test_run_weekly_fetch_builds_newsletters(conn):
   editions = db.list_editions(conn)
   assert len(editions) == 1; assert editions[0]["item_count"] == 2  # post + quote (quotes on by default)
 
+def test_run_weekly_fetch_enqueues_likes_and_starts_drain(conn, monkeypatch):
+  started = []
+  monkeypatch.setattr("app.user_actions.start_like_drain", lambda path: started.append(path))
+  db.add_account(conn, "alice")
+  client = XClient(bearer_token="t", http=FakeHttp(TWEETS))
+  now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
+  run_weekly_fetch(conn, client=client, now=now, db_path=":memory:")
+  assert db.like_queue_size(conn) == 2
+  assert started == [":memory:"]
+
 def test_week_bounds_is_last_complete_monday_week():
   now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)  # a Sunday
   start, end = week_bounds(now)

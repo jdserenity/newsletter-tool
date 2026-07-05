@@ -6,9 +6,15 @@ Personal tool that turns selected X accounts into clean weekly newsletters, view
 
 ```bash
 ./scripts/setup.sh
-cp .env.example .env   # then set X_BEARER_TOKEN in .env
+cp .env.example .env   # then set X_BEARER_TOKEN and OAuth vars in .env
 source venv/bin/activate
 news-dev
+```
+
+Manual weekly fetch (build newsletters + paced likes):
+
+```bash
+news-manual-fetch
 ```
 
 ## Test

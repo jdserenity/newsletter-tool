@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "newsletter-tool"
 version = "0.1.0"
-description = "Personal tool that turns selected X accounts into weekly digests"
+description = "Personal tool that turns selected X accounts into weekly newsletters"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -16,6 +16,7 @@ dependencies = [
   "apscheduler==3.11.0",
   "python-multipart==0.0.20",
   "python-dotenv==1.0.1",
+  "itsdangerous==2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +24,7 @@ dev = ["pytest==8.3.4"]
 
 [project.scripts]
 news-dev = "app.cli:dev"
+news-manual-fetch = "app.cli:fetch"
 
 [tool.setuptools.packages.find]
 where = ["."]
