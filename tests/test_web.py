@@ -23,6 +23,7 @@ def test_home_empty(client):
   assert "min-height:" in r.text and "newsletter-card" in r.text
   assert "flex-wrap: nowrap" in r.text and "newsletter-toolbar" in r.text
   assert "justify-content: space-between" in r.text
+  assert "flex-direction: column" in r.text and "newsletter-identity" in r.text
 
 def test_add_account(client):
   r = client.post("/accounts", data={"handle": "@alice"}, follow_redirects=True)

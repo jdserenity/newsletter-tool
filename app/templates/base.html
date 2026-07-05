@@ -69,7 +69,7 @@
     flex: 0 0 var(--card-width); width: var(--card-width);
     cursor: grab;
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-    display: flex; flex-direction: column; max-height: calc(100vh - 8rem); min-height: 900px;
+    display: flex; flex-direction: column; max-height: calc(100vh - 8rem); min-height: 600px;
     overflow: hidden;
   }
   .newsletter-toolbar {
@@ -78,12 +78,12 @@
     width: 100%; box-sizing: border-box;
   }
   .newsletter-identity {
-    display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; flex: 0 1 auto;
-    white-space: nowrap; overflow: hidden;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem;
+    min-width: 0; flex: 0 1 auto; overflow: hidden;
   }
-  .newsletter-identity a { color: var(--ink); text-decoration: none; font-weight: 600; flex-shrink: 0; }
+  .newsletter-identity a { color: var(--ink); text-decoration: none; font-weight: 600; flex-shrink: 0; line-height: 1.2; }
   .newsletter-identity a:hover { color: var(--accent); }
-  .newsletter-identity .muted { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .newsletter-identity .muted { overflow: hidden; text-overflow: ellipsis; max-width: 100%; white-space: nowrap; line-height: 1.2; }
   .newsletter-meta { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; flex: 0 0 auto; }
   .api-cost { font-size: 0.85rem; font-weight: 600; color: var(--accent); }
   .rss-link {
