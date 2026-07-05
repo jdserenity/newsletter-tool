@@ -33,4 +33,5 @@ python -c "from app.scheduler import run_job; print(run_job())"
 - `SESSION_SECRET` signs the browser cookie; generate with `openssl rand -hex 32` if you need a value.
 - Local dev default callback: `http://127.0.0.1:8000/auth/callback` — register that URL in the console for the app.
 - Web tests disable auth (`auth_enabled=False`); auth behavior is covered in `tests/test_auth.py`.
-- OAuth authorize fails on X’s page (generic “Something went wrong”) when: callback URL mismatch, OAuth 2.0 user auth not enabled, wrong Client ID/Secret (OAuth 2.0 pair — not API Key), or requested scopes exceed app permissions (e.g. `like.write` needs Read and write in the console). Default app scopes are `users.read offline.access` only.
+- **Keys and tokens ≠ user auth setup.** Client ID/Secret on the Keys page are necessary but not sufficient. Open **OAuth 2.0 Keys → Edit settings** and enable OAuth 2.0, choose **Web App**, set Callback URI and Website URL, then save. The “Read and write” line under OAuth 1.0 Access Token on the Keys page does not configure OAuth 2.0.
+- Immediate failure on X’s page (before a login form) usually means the OAuth 2.0 Edit settings page was never completed or the callback URI there does not match `X_OAUTH_CALLBACK_URL`.

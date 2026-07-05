@@ -11,8 +11,8 @@ AUTH_URL = "https://x.com/i/oauth2/authorize"
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
 USER_ME_URL = "https://api.x.com/2/users/me"
 
-# Sign-in only; add tweet.read like.write follows.write via X_OAUTH_SCOPES when those features ship.
-DEFAULT_SCOPES = ("users.read", "offline.access")
+# Scopes for sign-in plus future like/follow actions on digest content.
+DEFAULT_SCOPES = ("users.read", "tweet.read", "like.write", "follows.write", "offline.access")
 
 SESSION_ACCESS = "access_token"
 SESSION_REFRESH = "refresh_token"

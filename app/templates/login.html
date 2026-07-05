@@ -6,4 +6,16 @@
   <p class="muted">You will be redirected to X to approve access, then returned here.</p>
   <p><a href="/auth/login/start"><button type="button">Sign in with X</button></a></p>
 </div>
+<div class="card">
+  <p class="muted"><strong>If X shows an error before you can sign in</strong>, the Client ID and Secret on the Keys page are not enough. Click <strong>Edit settings</strong> next to <em>OAuth 2.0 Keys</em> in the Developer Console and confirm:</p>
+  <ul class="muted">
+    <li>OAuth 2.0 is enabled</li>
+    <li>Type of App is <strong>Web App</strong></li>
+    <li>Callback URI is exactly: <code>{{ oauth_callback }}</code></li>
+    <li>Website URL is set (e.g. <code>http://127.0.0.1:8000</code> for local dev)</li>
+    <li>App permissions include the scopes this app requests</li>
+  </ul>
+  <p class="muted">This app is using Client ID <code>{{ oauth_client_hint }}</code>, callback <code>{{ oauth_callback }}</code>, scopes <code>{{ oauth_scopes }}</code>. Those must match the OAuth 2.0 <em>Edit settings</em> page — not the OAuth 1.0 “Read and write” line on the Keys page.</p>
+  <p class="muted">Open the app at <code>http://127.0.0.1:8000</code> (not <code>localhost</code>) so the callback URL matches.</p>
+</div>
 {% endblock %}

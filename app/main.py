@@ -47,7 +47,11 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   if auth_config.enabled:
     @app.get("/auth/login", response_class=HTMLResponse)
     def auth_login_page(request: Request):
-      return render(request, "login.html", {})
+      return render(request, "login.html", {
+        "oauth_callback": auth_config.callback_url,
+        "oauth_scopes": " ".join(auth_config.scopes),
+        "oauth_client_hint": auth_config.client_id[:8] + "…" if auth_config.client_id else "",
+      })
 
     @app.get("/auth/login/start")
     def auth_login_start(request: Request):
