@@ -1,5 +1,27 @@
+from pathlib import Path
+
 from app import db
 from tests.conftest import make_tweet
+
+def test_resolve_db_path_default(monkeypatch):
+  monkeypatch.delenv("DATABASE_PATH", raising=False)
+  assert db.resolve_db_path() == db.DEFAULT_DB_PATH
+
+def test_resolve_db_path_from_env(monkeypatch, tmp_path):
+  monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "custom.db"))
+  assert db.resolve_db_path() == tmp_path / "custom.db"
+
+def test_resolve_db_path_override_beats_env(monkeypatch):
+  monkeypatch.setenv("DATABASE_PATH", "/other/path.db")
+  assert db.resolve_db_path("/override.db") == Path("/override.db")
+
+def test_connect_uses_database_path_env(monkeypatch, tmp_path):
+  db_file = tmp_path / "env.db"
+  monkeypatch.setenv("DATABASE_PATH", str(db_file))
+  c = db.connect()
+  db.add_account(c, "alice")
+  assert db_file.exists()
+  assert db.get_account(c, handle="alice")["handle"] == "alice"
 
 def test_add_and_list_accounts(conn):
   db.add_account(conn, "@alice")

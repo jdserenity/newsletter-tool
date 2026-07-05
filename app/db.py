@@ -1,8 +1,15 @@
 import json
+import os
 import sqlite3
 from pathlib import Path
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "newsletter.db"
+DEFAULT_DB_PATH = Path.home() / ".local" / "share" / "newsletter-tool" / "newsletter.db"
+
+def resolve_db_path(override=None):
+  if override is not None: return Path(override).expanduser()
+  env = os.environ.get("DATABASE_PATH")
+  if env: return Path(env).expanduser()
+  return DEFAULT_DB_PATH
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
@@ -48,7 +55,7 @@ CREATE TABLE IF NOT EXISTS api_calls (
 """
 
 def connect(db_path=None):
-  path = Path(db_path) if db_path else DEFAULT_DB_PATH
+  path = resolve_db_path(db_path)
   if str(path) != ":memory:": path.parent.mkdir(parents=True, exist_ok=True)
   conn = sqlite3.connect(str(path)); conn.row_factory = sqlite3.Row
   conn.executescript(SCHEMA)
