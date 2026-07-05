@@ -1,4 +1,7 @@
 """APScheduler weekly job: Monday 06:00 UTC, fetch last complete week and build digests."""
+from app.env import load_env
+load_env()
+
 from apscheduler.schedulers.background import BackgroundScheduler
 
 def run_job(db_path=None):

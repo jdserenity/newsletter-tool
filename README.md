@@ -6,7 +6,7 @@ Personal tool that turns selected X accounts into clean weekly digests, viewable
 
 ```bash
 pip install -r requirements.txt
-export X_BEARER_TOKEN=...   # X API v2 bearer token
+cp .env.example .env   # then set X_BEARER_TOKEN in .env
 uvicorn app.main:app --reload
 ```
 

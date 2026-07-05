@@ -2,6 +2,9 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from app.env import load_env
+load_env()
+
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
