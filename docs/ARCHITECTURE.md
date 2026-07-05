@@ -37,9 +37,9 @@ Single repo, single FastAPI app:
 
 ## Run locally
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"
 cp .env.example .env   # set X_BEARER_TOKEN in .env (loaded via python-dotenv)
-uvicorn app.main:app --reload
+news-dev
 pytest
 ```
 

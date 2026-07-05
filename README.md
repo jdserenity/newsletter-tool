@@ -5,9 +5,9 @@ Personal tool that turns selected X accounts into clean weekly digests, viewable
 ## Run
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"
 cp .env.example .env   # then set X_BEARER_TOKEN in .env
-uvicorn app.main:app --reload
+news-dev
 ```
 
 ## Test
