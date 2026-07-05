@@ -1,7 +1,16 @@
-from app.newsletter import build_newsletter
+import json
+from app.newsletter import build_newsletter, clean_tweet_text, media_for_display
 from tests.conftest import make_tweet
 
 ACCOUNT = {"handle": "alice", "include_quotes": 1, "include_replies": 0, "include_retweets": 0}
+
+PHOTO_RAW = {
+  "id": "99", "text": "sunset pic https://t.co/abc123", "created_at": "2026-06-30T12:00:00Z",
+  "public_metrics": {"like_count": 3, "retweet_count": 1},
+  "attachments": {"media_keys": ["3_99"]},
+  "entities": {"urls": [{"start": 11, "end": 33, "url": "https://t.co/abc123", "expanded_url": "https://pic.twitter.com/xyz", "media_key": "3_99"}]},
+  "media_expanded": [{"media_key": "3_99", "type": "photo", "url": "https://pbs.twimg.com/media/AbCd.jpg", "alt_text": "orange sky"}],
+}
 
 def test_includes_posts_and_quotes_by_default():
   tweets = [make_tweet("1", "post"), make_tweet("2", "quote")]
@@ -28,3 +37,27 @@ def test_item_shape():
   item = items[0]
   assert item["url"] == "https://x.com/alice/status/42"
   assert item["likes"] == 7; assert item["reposts"] == 2; assert item["kind"] == "post"
+  assert item["media"] == []
+
+def test_clean_tweet_text_strips_media_tco():
+  assert clean_tweet_text(PHOTO_RAW["text"], PHOTO_RAW) == "sunset pic"
+
+def test_media_for_display_photo_adds_size_suffix():
+  items = media_for_display(PHOTO_RAW)
+  assert len(items) == 1
+  assert items[0]["type"] == "photo"
+  assert items[0]["url"] == "https://pbs.twimg.com/media/AbCd.jpg?name=medium"
+  assert items[0]["alt"] == "orange sky"
+
+def test_media_for_display_video_uses_preview():
+  raw = {"media_expanded": [{"type": "video", "preview_image_url": "https://pbs.twimg.com/thumb.jpg"}]}
+  items = media_for_display(raw)
+  assert items[0]["url"] == "https://pbs.twimg.com/thumb.jpg"
+
+def test_build_newsletter_includes_media_and_strips_tco():
+  tweet = {"tweet_id": "99", "kind": "post", "text": PHOTO_RAW["text"], "created_at": PHOTO_RAW["created_at"],
+           "raw_json": json.dumps(PHOTO_RAW)}
+  items = build_newsletter([tweet], ACCOUNT)
+  assert items[0]["text"] == "sunset pic"
+  assert len(items[0]["media"]) == 1
+  assert "t.co" not in items[0]["text"]

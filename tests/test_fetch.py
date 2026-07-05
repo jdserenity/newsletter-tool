@@ -1,5 +1,5 @@
 from app import db
-from app.fetch.client import XClient, classify_tweet, COST_PER_POST_READ, COST_PER_USER_READ
+from app.fetch.client import XClient, classify_tweet, COST_PER_POST_READ, COST_PER_USER_READ, attach_media
 from app.fetch.runner import fetch_account_week, run_weekly_fetch, week_bounds
 from datetime import datetime, timezone
 
@@ -35,10 +35,19 @@ def test_settings_gate_api_params():
                          include_replies=False, include_retweets=False)
   _, params = http.requests[-1]
   assert params["exclude"] == "replies,retweets"
+  assert params["expansions"] == "attachments.media_keys"
+  assert "attachments" in params["tweet.fields"]
+  assert "url" in params["media.fields"]
   client.get_user_tweets("111", "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z",
                          include_replies=True, include_retweets=True)
   _, params = http.requests[-1]
   assert "exclude" not in params
+
+def test_attach_media_merges_includes():
+  tweets = [{"id": "1", "attachments": {"media_keys": ["3_1"]}}]
+  includes = {"media": [{"media_key": "3_1", "type": "photo", "url": "https://pbs.twimg.com/media/x.jpg"}]}
+  attach_media(tweets, includes)
+  assert tweets[0]["media_expanded"][0]["url"] == "https://pbs.twimg.com/media/x.jpg"
 
 def test_fetch_records_cost_and_stores_tweets(conn):
   aid = db.add_account(conn, "alice")

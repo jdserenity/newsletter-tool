@@ -90,6 +90,19 @@ def test_edition_page_renders(client):
   assert r.status_code == 200
   assert "hello world" in r.text; assert "$0.020" in r.text
 
+def test_edition_page_renders_media(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [{"tweet_id": "1", "kind": "post", "text": "sunset pic", "created_at": "2026-06-30T10:00:00Z",
+            "url": "https://x.com/alice/status/1", "likes": 3, "reposts": 1,
+            "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/x.jpg?name=medium", "alt": "sky"}]}]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.02)
+  eid = db.list_editions(c)[0]["id"]
+  r = client.get(f"/editions/{eid}")
+  assert 'class="tweet-media"' in r.text
+  assert 'src="https://pbs.twimg.com/media/x.jpg?name=medium"' in r.text
+  assert 'alt="sky"' in r.text
+
 def test_rss_feed(client):
   aid = _seed_edition(client.db_path)
   r = client.get(f"/feeds/{aid}.xml")

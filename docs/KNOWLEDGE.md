@@ -17,6 +17,9 @@ mv /path/to/old/data/newsletter.db ~/.local/share/newsletter-tool/
 ## Fetch vs newsletter filtering
 Replies and retweets can be excluded at the API via the `exclude` parameter — those tweets are never fetched and never billed. Quote tweets cannot be excluded server-side; they are always fetched and filtered in the newsletter builder when `include_quotes` is off.
 
+## Tweet media
+Media URLs come from the X API `attachments.media_keys` expansion (no extra per-tweet charge). Tweets already in the DB before this feature lack `media_expanded` until the next weekly fetch. Quoted-tweet media is not included yet — only media attached to the outer tweet is expanded.
+
 ## Terminology
 The product is **Newsletter Tool**. Never use the word "digest" in code, templates, or docs. Weekly snapshots live in the `editions` table. The old `digests` table is renamed automatically on connect.
 

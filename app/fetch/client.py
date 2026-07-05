@@ -7,7 +7,16 @@ BASE_URL = "https://api.x.com/2"
 COST_PER_POST_READ = 0.005
 COST_PER_USER_READ = 0.010
 
-TWEET_FIELDS = "created_at,referenced_tweets,entities,public_metrics"
+TWEET_FIELDS = "created_at,referenced_tweets,entities,public_metrics,attachments"
+MEDIA_FIELDS = "url,preview_image_url,type,alt_text,width,height"
+
+def attach_media(tweets, includes):
+  """Merge expanded media objects from includes.media onto each tweet as media_expanded."""
+  by_key = {m["media_key"]: m for m in (includes or {}).get("media", [])}
+  for t in tweets:
+    keys = (t.get("attachments") or {}).get("media_keys") or []
+    t["media_expanded"] = [by_key[k] for k in keys if k in by_key]
+  return tweets
 
 class XClient:
   def __init__(self, bearer_token=None, http=None):
@@ -27,11 +36,15 @@ class XClient:
     if not include_retweets: excludes.append("retweets")
     tweets = []; cost = 0.0; token = None
     while True:
-      params = {"start_time": start_time, "end_time": end_time, "max_results": 100, "tweet.fields": TWEET_FIELDS}
+      params = {
+        "start_time": start_time, "end_time": end_time, "max_results": 100,
+        "tweet.fields": TWEET_FIELDS, "expansions": "attachments.media_keys",
+        "media.fields": MEDIA_FIELDS}
       if excludes: params["exclude"] = ",".join(excludes)
       if token: params["pagination_token"] = token
       r = self.http.get(f"/users/{x_user_id}/tweets", params=params); r.raise_for_status()
       body = r.json(); page = body.get("data", [])
+      attach_media(page, body.get("includes"))
       tweets.extend(page); cost += len(page) * COST_PER_POST_READ
       token = body.get("meta", {}).get("next_token")
       if not token: break
