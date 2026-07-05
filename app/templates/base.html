@@ -8,7 +8,7 @@
   :root {
     --bg: #f7f5f0; --card: #ffffff; --ink: #1a1a1a; --muted: #6b6b6b;
     --accent: #2f5d62; --accent-soft: #e4eeee; --border: #e5e1d8; --radius: 12px;
-    --card-width: min(88vw, 520px);
+    --card-width: 600px;
   }
   * { box-sizing: border-box; }
   body {
@@ -53,7 +53,7 @@
   .carousel {
     display: flex; gap: 1rem; overflow-x: auto; overflow-y: hidden;
     width: 100%; max-width: 100%; padding: 0 1.25rem 1rem;
-    scroll-snap-type: x mandatory; cursor: grab;
+    cursor: grab;
     -ms-overflow-style: none; scrollbar-width: none;
   }
   .carousel::-webkit-scrollbar { display: none; }
@@ -62,29 +62,27 @@
 
   .newsletter-card {
     flex: 0 0 var(--card-width); width: var(--card-width);
-    scroll-snap-align: start; cursor: grab;
+    cursor: grab;
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
     display: flex; flex-direction: column; max-height: calc(100vh - 8rem); min-height: 320px;
   }
   .newsletter-toolbar {
-    display: flex; flex-wrap: nowrap; align-items: center; gap: 0.75rem 1rem;
+    display: flex; flex-wrap: nowrap; align-items: center; gap: 0.6rem 0.85rem;
     padding: 0.85rem 1rem; border-bottom: 1px solid var(--border);
-    overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none;
   }
-  .newsletter-toolbar::-webkit-scrollbar { display: none; }
   .newsletter-identity { display: flex; align-items: baseline; gap: 0.5rem; white-space: nowrap; flex-shrink: 0; }
   .newsletter-identity a { color: var(--ink); text-decoration: none; font-weight: 600; }
   .newsletter-identity a:hover { color: var(--accent); }
-  .newsletter-meta { display: flex; align-items: center; gap: 0.6rem; white-space: nowrap; flex-shrink: 0; }
+  .newsletter-meta { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; flex-shrink: 0; }
   .api-cost { font-size: 0.85rem; font-weight: 600; color: var(--accent); }
   .rss-link {
     display: inline-flex; align-items: center; gap: 0.25rem;
     text-decoration: none; font-size: 0.8rem; color: var(--muted);
   }
   .rss-link svg { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
-  .settings-row { display: flex; align-items: center; gap: 0.85rem; margin: 0; flex-shrink: 0; }
+  .settings-row { display: flex; align-items: center; gap: 0.6rem; margin: 0; flex-shrink: 0; }
   .toggle {
-    display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; white-space: nowrap;
     font-size: 0.78rem; color: var(--muted);
   }
   .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
