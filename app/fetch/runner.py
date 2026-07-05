@@ -3,7 +3,7 @@ settings at the API level, records costs in the DB, and stores raw tweets."""
 from datetime import datetime, timedelta, timezone
 
 from app import db
-from app.fetch.client import XClient, classify_tweet
+from app.fetch.client import XClient, classify_tweet, COST_PER_USER_READ
 
 def week_bounds(now=None):
   """Most recent complete Mon-Mon week as (start_iso, end_iso)."""
@@ -14,20 +14,25 @@ def week_bounds(now=None):
   fmt = lambda d: datetime(d.year, d.month, d.day, tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
   return fmt(start), fmt(end)
 
-def fetch_account_week(conn, client, account, week_start, week_end):
+def fetch_account_week(conn, client, account, week_start, week_end, now=None):
   """Fetch one account's tweets for the week. Returns cost incurred (USD)."""
+  now = now or datetime.now(timezone.utc)
   cost = 0.0
   if not account["x_user_id"]:
-    user, c = client.get_user_by_handle(account["handle"])
-    db.record_api_call(conn, account["id"], "users/by/username", 1, c); cost += c
+    user, _ = client.get_user_by_handle(account["handle"])
+    uc = COST_PER_USER_READ if db.billable_user_lookup(conn, account["id"], now=now) else 0.0
+    db.record_api_call(conn, account["id"], "users/by/username", 1 if uc else 0, uc); cost += uc
     db.set_account_identity(conn, account["id"], user["id"], user.get("name", account["handle"]))
     account = db.get_account(conn, account_id=account["id"])
-  tweets, c = client.get_user_tweets(
+  tweets, _ = client.get_user_tweets(
     account["x_user_id"], week_start, week_end,
     include_replies=bool(account["include_replies"]), include_retweets=bool(account["include_retweets"]))
-  db.record_api_call(conn, account["id"], "users/:id/tweets", len(tweets), c); cost += c
+  tweet_ids = [t["id"] for t in tweets]
+  c = db.post_read_cost(conn, tweet_ids, now=now)
+  billable = db.billable_post_count(conn, tweet_ids, now=now)
+  db.record_api_call(conn, account["id"], "users/:id/tweets", billable, c); cost += c
   for t in tweets: t["kind"] = classify_tweet(t)
-  db.save_tweets(conn, account["id"], tweets)
+  db.save_tweets(conn, account["id"], tweets, fetched_at=now)
   return cost
 
 def build_account_edition(conn, account, week_start, week_end, cost=0.0):
@@ -64,7 +69,7 @@ def run_weekly_fetch(conn, client=None, now=None, db_path=None):
   week_start, week_end = week_bounds(now)
   costs = {}
   for account in db.list_accounts(conn):
-    costs[account["id"]] = fetch_account_week(conn, client, account, week_start, week_end)
+    costs[account["id"]] = fetch_account_week(conn, client, account, week_start, week_end, now=now)
   results = []; enqueued = 0
   for account in db.list_accounts(conn):
     items = build_account_edition(conn, account, week_start, week_end, costs.get(account["id"], 0.0))

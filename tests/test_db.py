@@ -58,6 +58,29 @@ def test_cost_for_account(conn):
   db.record_api_call(conn, aid, "users/by/username", 1, 0.01)
   assert abs(db.cost_for_account(conn, aid) - 0.06) < 1e-9
 
+def test_billable_post_count_skips_recently_fetched_tweets(conn):
+  from datetime import datetime, timedelta, timezone
+  from app.fetch.client import COST_PER_POST_READ
+  aid = db.add_account(conn, "alice")
+  now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
+  db.save_tweets(conn, aid, [{"id": "1", "text": "hi", "created_at": "2026-06-30T12:00:00Z"}])
+  conn.execute("UPDATE tweets SET fetched_at = ? WHERE tweet_id = '1'", ((now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),))
+  conn.commit()
+  assert db.billable_post_count(conn, ["1", "2"], now=now) == 1
+  assert abs(db.post_read_cost(conn, ["1", "2"], now=now) - COST_PER_POST_READ) < 1e-9
+
+def test_migrate_zeros_duplicate_api_call_costs_within_24h(conn):
+  aid = db.add_account(conn, "alice")
+  conn.execute("INSERT INTO api_calls (account_id, endpoint, units, cost_usd, called_at) VALUES (?, 'users/:id/tweets', 4, 0.02, '2026-07-05 17:46:58')", (aid,))
+  conn.execute("INSERT INTO api_calls (account_id, endpoint, units, cost_usd, called_at) VALUES (?, 'users/:id/tweets', 4, 0.02, '2026-07-05 20:01:52')", (aid,))
+  conn.commit()
+  conn.execute("DELETE FROM schema_migrations WHERE name = 'api_cost_dedup'"); conn.commit()
+  db._repair_inflated_api_call_costs(conn)
+  rows = conn.execute("SELECT cost_usd FROM api_calls ORDER BY called_at").fetchall()
+  assert rows[0]["cost_usd"] == 0.02
+  assert rows[1]["cost_usd"] == 0.0
+  assert abs(db.cost_for_account(conn, aid) - 0.02) < 1e-9
+
 def test_save_edition_upserts_per_week(conn):
   aid = db.add_account(conn, "alice")
   db.save_edition(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", [{"a": 1}], 0.05)

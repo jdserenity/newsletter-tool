@@ -1,7 +1,8 @@
+from datetime import datetime, timedelta, timezone
+
 from app import db
 from app.fetch.client import XClient, classify_tweet, COST_PER_POST_READ, COST_PER_USER_READ
 from app.fetch.runner import fetch_account_week, repair_missing_editions, run_weekly_fetch, week_bounds
-from datetime import datetime, timezone
 
 class FakeResponse:
   def __init__(self, body): self.body = body
@@ -109,3 +110,41 @@ def test_week_bounds_is_last_complete_monday_week():
   now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)  # a Sunday
   start, end = week_bounds(now)
   assert start == "2026-06-22T00:00:00Z"; assert end == "2026-06-29T00:00:00Z"
+
+def test_second_fetch_within_24h_dedupes_post_read_cost(conn):
+  aid = db.add_account(conn, "alice")
+  client = XClient(bearer_token="t", http=FakeHttp(TWEETS))
+  account = db.get_account(conn, account_id=aid)
+  now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
+  week = ("2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z")
+  cost1 = fetch_account_week(conn, client, account, *week, now=now)
+  account = db.get_account(conn, account_id=aid)
+  cost2 = fetch_account_week(conn, client, account, *week, now=now + timedelta(hours=2))
+  expected = COST_PER_USER_READ + 2 * COST_PER_POST_READ
+  assert abs(cost1 - expected) < 1e-9
+  assert abs(cost2) < 1e-9
+  assert abs(db.cost_for_account(conn, aid) - expected) < 1e-9
+
+def test_fetch_charges_only_new_tweets_within_24h_window(conn):
+  aid = db.add_account(conn, "alice")
+  http = FakeHttp(TWEETS)
+  client = XClient(bearer_token="t", http=http)
+  account = db.get_account(conn, account_id=aid)
+  now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
+  week = ("2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z")
+  fetch_account_week(conn, client, account, *week, now=now)
+  account = db.get_account(conn, account_id=aid)
+  http.tweets = TWEETS + [{"id": "3", "text": "new", "created_at": "2026-07-02T10:00:00Z"}]
+  cost = fetch_account_week(conn, client, account, *week, now=now + timedelta(hours=23))
+  assert abs(cost - COST_PER_POST_READ) < 1e-9
+
+def test_fetch_rebills_tweets_after_24h_window(conn):
+  aid = db.add_account(conn, "alice")
+  client = XClient(bearer_token="t", http=FakeHttp(TWEETS))
+  account = db.get_account(conn, account_id=aid)
+  now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
+  week = ("2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z")
+  fetch_account_week(conn, client, account, *week, now=now)
+  account = db.get_account(conn, account_id=aid)
+  cost = fetch_account_week(conn, client, account, *week, now=now + timedelta(hours=25))
+  assert abs(cost - 2 * COST_PER_POST_READ) < 1e-9
