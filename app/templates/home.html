@@ -86,6 +86,12 @@
       e.preventDefault();
       carousel.scrollLeft = scrollLeft - (e.clientX - startX);
     });
+    carousel.addEventListener('wheel', function(e) {
+      if (e.deltaX !== 0) return;
+      if (e.deltaY === 0) return;
+      e.preventDefault();
+      carousel.scrollLeft += e.deltaY;
+    }, { passive: false });
   }
 
   var input = document.getElementById('handle-input');
