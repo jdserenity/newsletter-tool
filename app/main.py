@@ -26,7 +26,9 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
 
   @asynccontextmanager
   async def lifespan(app):
+    from app.user_actions import resume_like_drain_if_needed
     scheduler = start_scheduler(path) if with_scheduler else None
+    resume_like_drain_if_needed(path)
     yield
     if scheduler: scheduler.shutdown(wait=False)
 

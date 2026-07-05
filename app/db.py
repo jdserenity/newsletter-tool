@@ -68,10 +68,6 @@ CREATE TABLE IF NOT EXISTS like_queue (
   tweet_id TEXT NOT NULL UNIQUE,
   queued_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE TABLE IF NOT EXISTS like_pacing (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  next_like_at TEXT
-);
 """
 
 def connect(db_path=None):
@@ -203,14 +199,3 @@ def dequeue_like(conn, tweet_id):
 
 def like_queue_size(conn):
   return conn.execute("SELECT COUNT(*) AS c FROM like_queue").fetchone()["c"]
-
-def get_next_like_at(conn):
-  row = conn.execute("SELECT next_like_at FROM like_pacing WHERE id = 1").fetchone()
-  return row["next_like_at"] if row and row["next_like_at"] else None
-
-def set_next_like_at(conn, when_iso):
-  conn.execute(
-    """INSERT INTO like_pacing (id, next_like_at) VALUES (1, ?)
-       ON CONFLICT(id) DO UPDATE SET next_like_at = excluded.next_like_at""",
-    (when_iso,))
-  conn.commit()

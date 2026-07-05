@@ -62,14 +62,15 @@ def test_run_weekly_fetch_builds_digests(conn):
   digests = db.list_digests(conn)
   assert len(digests) == 1; assert digests[0]["item_count"] == 2  # post + quote (quotes on on default)
 
-def test_run_weekly_fetch_enqueues_likes_without_calling_api(conn):
+def test_run_weekly_fetch_enqueues_likes_and_starts_drain(conn, monkeypatch):
+  started = []
+  monkeypatch.setattr("app.user_actions.start_like_drain", lambda path: started.append(path))
   db.add_account(conn, "alice")
   client = XClient(bearer_token="t", http=FakeHttp(TWEETS))
   now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
-  run_weekly_fetch(conn, client=client, now=now)
+  run_weekly_fetch(conn, client=client, now=now, db_path=":memory:")
   assert db.like_queue_size(conn) == 2
-  assert db.peek_like_queue(conn) == "1"
-  assert not db.is_tweet_liked(conn, "1")
+  assert started == [":memory:"]
 
 def test_week_bounds_is_last_complete_monday_week():
   now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)  # a Sunday
