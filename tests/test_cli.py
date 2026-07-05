@@ -7,4 +7,4 @@ def test_dev_starts_uvicorn_with_reload(monkeypatch):
   import uvicorn
   monkeypatch.setattr(uvicorn, "run", fake_run)
   dev()
-  assert uvicorn_calls == [(("app.main:app",), {"reload": True})]
+  assert uvicorn_calls == [(("app.main:create_app",), {"factory": True, "reload": True})]

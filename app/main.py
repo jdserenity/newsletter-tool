@@ -1,4 +1,5 @@
 import json
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,15 +9,20 @@ load_env()
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
-from app import db
+from app import auth, db
 from app.scheduler import start_scheduler
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-def create_app(db_path=None, with_scheduler=True):
+def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config=None):
   path = str(db.resolve_db_path(db_path))
+  auth_config = auth_config or auth.AuthConfig.from_env(enabled=auth_enabled)
+  if auth_config.enabled and not auth_config.configured():
+    raise RuntimeError("User auth is enabled but X_CLIENT_ID, X_CLIENT_SECRET, or SESSION_SECRET is missing")
+
   @asynccontextmanager
   async def lifespan(app):
     scheduler = start_scheduler(path) if with_scheduler else None
@@ -25,8 +31,57 @@ def create_app(db_path=None, with_scheduler=True):
 
   app = FastAPI(title="newsletter-tool", lifespan=lifespan)
   app.state.db_path = path
+  app.state.auth_config = auth_config
+
+  if auth_config.enabled:
+    app.add_middleware(auth.RequireAuthMiddleware, config=auth_config)
+    app.add_middleware(SessionMiddleware, secret_key=auth_config.session_secret, https_only=False)
 
   def conn(): return db.connect(path)
+
+  def render(request: Request, name: str, ctx: dict):
+    ctx = dict(ctx)
+    if auth_config.enabled: ctx["user"] = auth.session_user(request)
+    return templates.TemplateResponse(request, name, ctx)
+
+  if auth_config.enabled:
+    @app.get("/auth/login", response_class=HTMLResponse)
+    def auth_login_page(request: Request):
+      return render(request, "login.html", {})
+
+    @app.get("/auth/login/start")
+    def auth_login_start(request: Request):
+      state = secrets.token_urlsafe(32)
+      verifier, challenge = auth.make_pkce_pair()
+      request.session[auth.SESSION_OAUTH_STATE] = state
+      request.session[auth.SESSION_CODE_VERIFIER] = verifier
+      url = auth.build_authorize_url(
+        auth_config.client_id, auth_config.callback_url, state, challenge, auth_config.scopes)
+      return RedirectResponse(url, status_code=303)
+
+    @app.get("/auth/callback")
+    def auth_callback(request: Request, code: str = "", state: str = ""):
+      if state != request.session.get(auth.SESSION_OAUTH_STATE):
+        raise HTTPException(400, "Invalid OAuth state")
+      verifier = request.session.get(auth.SESSION_CODE_VERIFIER)
+      if not code or not verifier:
+        raise HTTPException(400, "Missing authorization code")
+      http = auth.http_client(auth_config)
+      try:
+        token = auth.exchange_code(http, auth_config.client_id, auth_config.client_secret,
+          auth_config.callback_url, code, verifier)
+        me = auth.fetch_me(http, token["access_token"])
+      except Exception as e:
+        raise HTTPException(400, f"OAuth token exchange failed: {e}") from e
+      auth.store_user_session(request, token, me)
+      request.session.pop(auth.SESSION_OAUTH_STATE, None)
+      request.session.pop(auth.SESSION_CODE_VERIFIER, None)
+      return RedirectResponse("/", status_code=303)
+
+    @app.post("/auth/logout")
+    def auth_logout(request: Request):
+      auth.clear_session(request)
+      return RedirectResponse("/auth/login", status_code=303)
 
   @app.get("/", response_class=HTMLResponse)
   def home(request: Request):
@@ -34,7 +89,7 @@ def create_app(db_path=None, with_scheduler=True):
     accounts = db.list_accounts(c)
     for a in accounts: a["total_cost"] = db.cost_for_account(c, a["id"])
     digests = db.list_digests(c)
-    return templates.TemplateResponse(request, "home.html", {"accounts": accounts, "digests": digests})
+    return render(request, "home.html", {"accounts": accounts, "digests": digests})
 
   @app.post("/accounts")
   def add_account(handle: str = Form(...)):
@@ -55,7 +110,7 @@ def create_app(db_path=None, with_scheduler=True):
     if not account: raise HTTPException(404)
     account["total_cost"] = db.cost_for_account(c, account_id)
     digests = db.list_digests(c, account_id)
-    return templates.TemplateResponse(request, "account.html", {"account": account, "digests": digests})
+    return render(request, "account.html", {"account": account, "digests": digests})
 
   @app.post("/accounts/{account_id}/settings")
   def save_settings(account_id: int, include_quotes: bool = Form(False),
@@ -69,7 +124,7 @@ def create_app(db_path=None, with_scheduler=True):
     digest = db.get_digest(conn(), digest_id)
     if not digest: raise HTTPException(404)
     items = json.loads(digest["content_json"])
-    return templates.TemplateResponse(request, "digest.html", {"digest": digest, "items": items})
+    return render(request, "digest.html", {"digest": digest, "items": items})
 
   @app.get("/feeds/{account_id}.xml")
   def account_feed(request: Request, account_id: int):
@@ -82,5 +137,3 @@ def create_app(db_path=None, with_scheduler=True):
     return Response(digest_feed(account, digests, base), media_type="application/rss+xml")
 
   return app
-
-app = create_app()  # path from DATABASE_PATH env or ~/.local/share/newsletter-tool/newsletter.db

@@ -50,8 +50,14 @@
 <div class="wrap">
   <header class="site">
     <h1><a href="/">Weekly Digests</a></h1>
-    <span class="tag">log off without losing the signal</span>
+    <span class="tag">{% if user %}@{{ user.username }}{% else %}log off without losing the signal{% endif %}</span>
   </header>
+  {% if user %}
+  <p class="muted row" style="margin-top:-1.25rem;margin-bottom:1.5rem;">
+    Signed in as <strong>@{{ user.username }}</strong>
+    <form class="inline" method="post" action="/auth/logout"><button class="ghost" type="submit">Sign out</button></form>
+  </p>
+  {% endif %}
   {% block content %}{% endblock %}
 </div>
 </body>
