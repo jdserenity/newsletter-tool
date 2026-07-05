@@ -27,7 +27,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Same resource requested twice within 24 hours is charged once (X deduplication).
 - **App credentials (server):** `X_BEARER_TOKEN` — used by the weekly fetch job and other read-only API calls that act as the app, not as a logged-in user.
 - **User OAuth 2.0 (browser):** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET` — OAuth 2.0 Authorization Code with PKCE. All web routes except `/auth/*` require a signed-in X user session. Scopes at sign-in: `users.read`, `tweet.read`, `like.write`, `follows.write`, `offline.access`. Optional `X_OAUTH_SCOPES` overrides that list. Bearer-token fetch and scheduling do not use the user session.
-- **Owner actions on X:** Adding a tracked account triggers a follow from the signed-in owner account (POST follow; no pre-check of the following list). After each weekly digest is built, tweets that made it into the digest are liked from the owner account. OAuth tokens persist in `oauth_session` (refreshed before the weekly job). Already-liked tweet IDs are stored in `liked_tweets` to avoid repeat API calls.
+- **Owner actions on X:** Adding a tracked account triggers a follow from the signed-in owner account (POST follow; no pre-check of the following list). After each weekly digest is built, tweets that made it into the digest are queued for background liking (~1 minute plus 1–20s jitter between likes). OAuth tokens persist in `oauth_session` (refreshed when the like worker runs). Already-liked tweet IDs are stored in `liked_tweets`; pending likes live in `like_queue`.
 
 ## System layout
 Single repo, single FastAPI app:

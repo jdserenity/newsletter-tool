@@ -62,23 +62,14 @@ def test_run_weekly_fetch_builds_digests(conn):
   digests = db.list_digests(conn)
   assert len(digests) == 1; assert digests[0]["item_count"] == 2  # post + quote (quotes on on default)
 
-def test_run_weekly_fetch_likes_digest_items_when_oauth_present(conn, monkeypatch):
-  from app.user_actions import UserActionsClient
+def test_run_weekly_fetch_enqueues_likes_without_calling_api(conn):
   db.add_account(conn, "alice")
-  db.save_oauth_session(conn, "owner", "at", "rt")
-  monkeypatch.setattr("app.auth.refresh_access_token", lambda *a, **k: {"access_token": "at", "refresh_token": "rt"})
-  http = FakeHttp(TWEETS); client = XClient(bearer_token="t", http=http)
-  class ActionsFakeHttp:
-    def __init__(self): self.posts = []
-    def post(self, path, headers=None, json=None):
-      self.posts.append((path, headers or {}, json or {}))
-      return type("R", (), {"raise_for_status": lambda self: None, "json": lambda self: {"data": {"liked": True}}})()
-  actions_http = ActionsFakeHttp()
+  client = XClient(bearer_token="t", http=FakeHttp(TWEETS))
   now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
-  run_weekly_fetch(conn, client=client, now=now, actions_client=UserActionsClient(http=actions_http))
-  liked_ids = {p[2]["tweet_id"] for p in actions_http.posts}
-  assert liked_ids == {"1", "2"}
-  assert db.is_tweet_liked(conn, "1") and db.is_tweet_liked(conn, "2")
+  run_weekly_fetch(conn, client=client, now=now)
+  assert db.like_queue_size(conn) == 2
+  assert db.peek_like_queue(conn) == "1"
+  assert not db.is_tweet_liked(conn, "1")
 
 def test_week_bounds_is_last_complete_monday_week():
   now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)  # a Sunday

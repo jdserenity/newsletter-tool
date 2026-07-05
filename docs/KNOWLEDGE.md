@@ -39,7 +39,7 @@ Published per-user limits vary by legacy plan tier (Pro / Basic / Free). Pay-per
 | Follow | `POST /2/users/:id/following` | 50 / 15 min | 5 / 15 min |
 | Like | `POST /2/users/:id/likes` | 1000 / 24 hours | 200 / 24 hours |
 
-Follow uses a 15-minute window; likes use a 24-hour window. Exceeding either returns HTTP 429; response headers include `x-rate-limit-remaining` and `x-rate-limit-reset`. X Developer Guidelines state likes must be user-initiated (no bulk/auto-like products); this app likes only digest items the owner already chose to track — still automate conservatively. Re-follow is handled by POSTing follow directly (cheaper than paginating the full following list).
+Follow uses a 15-minute window; likes use a 24-hour window. Exceeding either returns HTTP 429; response headers include `x-rate-limit-remaining` and `x-rate-limit-reset`. X Developer Guidelines state likes must be user-initiated (no bulk/auto-like products); this app likes only digest items the owner already chose to track — still automate conservatively. Re-follow is handled by POSTing follow directly (cheaper than paginating the full following list). Likes are paced in the background at ~61–80 seconds apart (60s + randint 1–20) via APScheduler polling every 15s.
 
 ## Manual weekly fetch
 ```bash
