@@ -43,5 +43,6 @@ Follow uses a 15-minute window; likes use a 24-hour window. Exceeding either ret
 
 ## Manual weekly fetch
 ```bash
-python -c "from app.scheduler import run_job; print(run_job())"
+news-fetch
 ```
+Fetches the last complete week, builds digests, then drains the like queue in the foreground (paced). Re-run `./scripts/setup.sh` or `pip install -e .` once after pulling if `news-fetch` is not found.
