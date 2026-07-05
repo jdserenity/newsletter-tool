@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}@{{ digest.handle }} — week of {{ digest.week_start[:10] }}{% endblock %}
+{% block title %}@{{ edition.handle }} — week of {{ edition.week_start[:10] }}{% endblock %}
 {% block content %}
-<h2>@{{ digest.handle }} — week of {{ digest.week_start[:10] }}</h2>
+<h2>@{{ edition.handle }} — week of {{ edition.week_start[:10] }}</h2>
 <div class="card">
-  <span class="muted">{{ digest.item_count }} items · API cost ${{ "%.3f"|format(digest.cost_usd) }} ·
-  built {{ digest.built_at }}</span>
+  <span class="muted">{{ edition.item_count }} items · API cost ${{ "%.3f"|format(edition.cost_usd) }} ·
+  built {{ edition.built_at }}</span>
 </div>
 
 {% for item in items %}

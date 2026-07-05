@@ -1,38 +1,89 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Tracked accounts</h2>
-{% for a in accounts %}
-<div class="card row">
-  <div>
-    <a href="/accounts/{{ a.id }}"><strong>@{{ a.handle }}</strong></a>
-    {% if a.display_name %}<span class="muted">{{ a.display_name }}</span>{% endif %}
-    <div class="muted">API cost to date: ${{ "%.2f"|format(a.total_cost) }}</div>
-  </div>
-  <form class="inline" method="post" action="/accounts/{{ a.id }}/remove">
-    <button class="ghost" type="submit">Remove</button>
-  </form>
+<div class="carousel" id="newsletter-carousel">
+  {% for card in cards %}
+  {% set a = card.account %}
+  {% set e = card.edition %}
+  <article class="newsletter-card">
+    <div class="newsletter-toolbar">
+      <div class="newsletter-identity">
+        <strong>@{{ a.handle }}</strong>
+        {% if a.display_name %}<span class="muted">{{ a.display_name }}</span>{% endif %}
+      </div>
+      <div class="newsletter-meta">
+        <span class="api-cost">API ${{ "%.2f"|format(a.total_cost) }}</span>
+        <a class="rss-link muted" href="/feeds/{{ a.id }}.xml" title="RSS feed">RSS</a>
+        <form class="inline" method="post" action="/accounts/{{ a.id }}/remove">
+          <button class="ghost icon-btn" type="submit" title="Remove">×</button>
+        </form>
+      </div>
+      <form class="settings-row" method="post" action="/accounts/{{ a.id }}/settings">
+        <label class="toggle">
+          <span class="toggle-label">Quotes</span>
+          <input type="checkbox" name="include_quotes" value="true" {% if a.include_quotes %}checked{% endif %} onchange="this.form.submit()">
+          <span class="toggle-rail"><span class="toggle-thumb"></span></span>
+        </label>
+        <label class="toggle">
+          <span class="toggle-label">Replies</span>
+          <input type="checkbox" name="include_replies" value="true" {% if a.include_replies %}checked{% endif %} onchange="this.form.submit()">
+          <span class="toggle-rail"><span class="toggle-thumb"></span></span>
+        </label>
+        <label class="toggle">
+          <span class="toggle-label">Retweets</span>
+          <input type="checkbox" name="include_retweets" value="true" {% if a.include_retweets %}checked{% endif %} onchange="this.form.submit()">
+          <span class="toggle-rail"><span class="toggle-thumb"></span></span>
+        </label>
+      </form>
+    </div>
+    <div class="newsletter-body">
+      {% if e %}
+      <div class="week-label muted">Week of {{ e.week_start[:10] }} · {{ e.item_count }} items · ${{ "%.2f"|format(e.cost_usd) }}</div>
+      {% for item in card.entries %}
+      <div class="tweet">
+        <div>{{ item.text }}</div>
+        <div class="meta">
+          <span class="pill">{{ item.kind }}</span>
+          {{ item.created_at[:16].replace("T", " · ") }} ·
+          {{ item.likes }} likes · {{ item.reposts }} reposts ·
+          <a href="{{ item.url }}">view on X</a>
+        </div>
+      </div>
+      {% else %}
+      <p class="muted">Nothing this week.</p>
+      {% endfor %}
+      {% else %}
+      <p class="muted">No newsletter yet. Builds weekly, or run a fetch manually.</p>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+  <article class="newsletter-card add-card">
+    <form method="post" action="/accounts" class="add-form">
+      <div class="add-label">Add account</div>
+      <div class="add-row">
+        <input type="text" name="handle" placeholder="@handle" required>
+        <button type="submit">Add</button>
+      </div>
+    </form>
+  </article>
 </div>
-{% else %}
-<p class="muted">No accounts tracked yet.</p>
-{% endfor %}
-
-<div class="card">
-  <form method="post" action="/accounts" class="row">
-    <input type="text" name="handle" placeholder="@handle" required>
-    <button type="submit">Track account</button>
-  </form>
-</div>
-
-<h2>Recent digests</h2>
-{% for d in digests %}
-<div class="card row">
-  <div>
-    <a href="/digests/{{ d.id }}"><strong>@{{ d.handle }}</strong> — week of {{ d.week_start[:10] }}</a>
-    <div class="muted">{{ d.item_count }} items · cost ${{ "%.2f"|format(d.cost_usd) }}</div>
-  </div>
-  <span class="pill">digest</span>
-</div>
-{% else %}
-<p class="muted">No digests yet. They build weekly, or can be run manually.</p>
-{% endfor %}
+<script>
+(function() {
+  var el = document.getElementById('newsletter-carousel');
+  if (!el) return;
+  var down = false, startX = 0, scrollLeft = 0;
+  el.addEventListener('mousedown', function(e) {
+    if (e.target.closest('a, button, input, label')) return;
+    down = true; startX = e.pageX - el.offsetLeft; scrollLeft = el.scrollLeft;
+    el.classList.add('dragging');
+  });
+  el.addEventListener('mouseleave', function() { down = false; el.classList.remove('dragging'); });
+  el.addEventListener('mouseup', function() { down = false; el.classList.remove('dragging'); });
+  el.addEventListener('mousemove', function(e) {
+    if (!down) return;
+    e.preventDefault();
+    el.scrollLeft = scrollLeft - (e.pageX - el.offsetLeft - startX);
+  });
+})();
+</script>
 {% endblock %}

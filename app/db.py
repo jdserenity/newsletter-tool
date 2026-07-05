@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS tweets (
   raw_json TEXT NOT NULL,
   fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE TABLE IF NOT EXISTS digests (
+CREATE TABLE IF NOT EXISTS editions (
   id INTEGER PRIMARY KEY,
   account_id INTEGER NOT NULL REFERENCES accounts(id),
   week_start TEXT NOT NULL,
@@ -59,7 +59,18 @@ def connect(db_path=None):
   if str(path) != ":memory:": path.parent.mkdir(parents=True, exist_ok=True)
   conn = sqlite3.connect(str(path)); conn.row_factory = sqlite3.Row
   conn.executescript(SCHEMA)
+  _migrate_schema(conn)
   return conn
+
+def _migrate_schema(conn):
+  tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+  if "digests" not in tables: return
+  if "editions" not in tables:
+    conn.execute("ALTER TABLE digests RENAME TO editions")
+  else:
+    conn.execute("INSERT OR IGNORE INTO editions SELECT * FROM digests")
+    conn.execute("DROP TABLE digests")
+  conn.commit()
 
 # --- accounts ---
 
@@ -116,11 +127,11 @@ def cost_for_account(conn, account_id, since=None):
   if since: q += " AND called_at >= ?"; params.append(since)
   return conn.execute(q, params).fetchone()["c"]
 
-# --- digests ---
+# --- editions (weekly newsletter snapshots) ---
 
-def save_digest(conn, account_id, week_start, week_end, items, cost_usd):
+def save_edition(conn, account_id, week_start, week_end, items, cost_usd):
   conn.execute(
-    """INSERT INTO digests (account_id, week_start, week_end, item_count, cost_usd, content_json)
+    """INSERT INTO editions (account_id, week_start, week_end, item_count, cost_usd, content_json)
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(account_id, week_start) DO UPDATE SET
          week_end = excluded.week_end, item_count = excluded.item_count,
@@ -129,15 +140,19 @@ def save_digest(conn, account_id, week_start, week_end, items, cost_usd):
     (account_id, week_start, week_end, len(items), cost_usd, json.dumps(items)))
   conn.commit()
 
-def list_digests(conn, account_id=None):
-  q = """SELECT d.*, a.handle, a.display_name FROM digests d JOIN accounts a ON a.id = d.account_id"""
+def list_editions(conn, account_id=None):
+  q = """SELECT e.*, a.handle, a.display_name FROM editions e JOIN accounts a ON a.id = e.account_id"""
   params = []
-  if account_id is not None: q += " WHERE d.account_id = ?"; params.append(account_id)
-  q += " ORDER BY d.week_start DESC"
+  if account_id is not None: q += " WHERE e.account_id = ?"; params.append(account_id)
+  q += " ORDER BY e.week_start DESC"
   return [dict(r) for r in conn.execute(q, params).fetchall()]
 
-def get_digest(conn, digest_id):
+def get_edition(conn, edition_id):
   row = conn.execute(
-    "SELECT d.*, a.handle, a.display_name FROM digests d JOIN accounts a ON a.id = d.account_id WHERE d.id = ?",
-    (digest_id,)).fetchone()
+    "SELECT e.*, a.handle, a.display_name FROM editions e JOIN accounts a ON a.id = e.account_id WHERE e.id = ?",
+    (edition_id,)).fetchone()
   return dict(row) if row else None
+
+def latest_edition(conn, account_id):
+  rows = list_editions(conn, account_id)
+  return rows[0] if rows else None
