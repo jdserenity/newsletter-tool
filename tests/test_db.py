@@ -71,17 +71,17 @@ def test_edition_for_week(conn):
   assert db.edition_for_week(conn, aid, "2026-06-22T00:00:00Z")["item_count"] == 1
   assert db.edition_for_week(conn, aid, "2026-06-29T00:00:00Z") is None
 
-def test_database_overview_flags_missing_edition(conn):
+def test_database_overview_reports_missing_edition(conn):
   from app.fetch.runner import week_bounds
   ws, we = week_bounds()
   aid = db.add_account(conn, "alice")
   db.save_tweets(conn, aid, [{"id": "1", "text": "hi", "created_at": "2026-06-23T12:00:00Z", "kind": "post"}])
   o = db.database_overview(conn, ws, we)
-  assert o["accounts"][0]["needs_rebuild"] is True
+  assert o["accounts"][0]["edition_items"] is None
   assert o["accounts"][0]["tweets_in_week"] == 1
   db.save_edition(conn, aid, ws, we, [{"tweet_id": "1"}], 0.01)
   o = db.database_overview(conn, ws, we)
-  assert o["accounts"][0]["needs_rebuild"] is False
+  assert o["accounts"][0]["edition_items"] == 1
 
 def test_migrate_digests_table_to_editions(tmp_path):
   import sqlite3

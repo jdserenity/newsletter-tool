@@ -55,19 +55,3 @@ def test_db_status_prints_overview(monkeypatch, capsys):
   assert "Database: /tmp/news.db" in out
   assert "@karpathy" in out
   assert "1 in newsletter" in out
-
-def test_db_status_rebuild_flag(monkeypatch, capsys):
-  class FakeConn:
-    def close(self): pass
-  rebuilt = []
-  monkeypatch.setattr("app.cli._open_db", lambda: ("/tmp/news.db", FakeConn()))
-  monkeypatch.setattr("app.fetch.runner.rebuild_editions", lambda conn: rebuilt.append(1) or [("karpathy", 1)])
-  monkeypatch.setattr("app.db.database_overview", lambda conn: {
-    "week_start": "2026-06-22T00:00:00Z", "week_end": "2026-06-29T00:00:00Z",
-    "tweet_count": 1, "edition_count": 1, "api_cost_usd": 0.01, "like_queue_size": 0,
-    "oauth_signed_in": False, "accounts": [],
-  })
-  db_status(rebuild=True)
-  out = capsys.readouterr().out
-  assert rebuilt == [1]
-  assert "Rebuilt @karpathy: 1 items" in out

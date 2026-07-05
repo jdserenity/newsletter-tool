@@ -7,16 +7,11 @@ def _open_db():
   path = db.resolve_db_path()
   return path, db.connect(path)
 
-def db_status(rebuild=False):
+def db_status():
   """Print a quick overview of what's in the database."""
   from app import db
-  from app.fetch.runner import rebuild_editions
   path, conn = _open_db()
   try:
-    if rebuild:
-      for handle, n in rebuild_editions(conn):
-        print(f"Rebuilt @{handle}: {n} items")
-      print()
     o = db.database_overview(conn)
     print(f"Database: {path}")
     print(f"Week: {o['week_start'][:10]} → {o['week_end'][:10]}")
@@ -31,8 +26,6 @@ def db_status(rebuild=False):
       name = f" ({a['display_name']})" if a.get("display_name") else ""
       ed = f"{a['edition_items']} in newsletter" if a["edition_items"] is not None else "no newsletter"
       print(f"  @{a['handle']}{name}: {a['tweet_count']} stored · {a['tweets_in_week']} this week · {ed} · API ${a['total_cost_usd']:.3f}")
-      if a["needs_rebuild"]:
-        print(f"    ⚠ stored tweets for this week but no newsletter — run: news-db-status --rebuild")
   finally:
     conn.close()
 
@@ -47,6 +40,7 @@ def fetch():
   from app.user_actions import UserActionsClient, drain_like_queue
   path, conn = _open_db()
   try:
+    print(f"Database: {path}")
     results = run_weekly_fetch(conn)  # enqueue only; no background thread
     queued = db.like_queue_size(conn)
     for handle, cost in results:
@@ -61,5 +55,4 @@ def fetch():
     conn.close()
 
 def db_status_entry():
-  import sys
-  db_status(rebuild="--rebuild" in sys.argv)
+  db_status()

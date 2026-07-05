@@ -237,7 +237,6 @@ def database_overview(conn, week_start=None, week_end=None):
       "tweet_count": tweet_count, "tweets_in_week": tweets_in_week,
       "edition_items": edition["item_count"] if edition else None,
       "edition_cost_usd": edition["cost_usd"] if edition else None,
-      "needs_rebuild": tweets_in_week > 0 and edition is None,
       "total_cost_usd": cost_for_account(conn, a["id"]),
     })
   totals = conn.execute(
