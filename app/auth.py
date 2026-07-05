@@ -13,7 +13,7 @@ AUTH_URL = "https://x.com/i/oauth2/authorize"
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
 USER_ME_URL = "https://api.x.com/2/users/me"
 
-# Scopes for sign-in plus future like/follow actions on digest content.
+# Scopes for sign-in plus like/follow actions on newsletter content.
 DEFAULT_SCOPES = ("users.read", "tweet.read", "like.write", "follows.write", "offline.access")
 
 SESSION_ACCESS = "access_token"

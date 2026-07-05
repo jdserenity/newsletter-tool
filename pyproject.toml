@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "newsletter-tool"
 version = "0.1.0"
-description = "Personal tool that turns selected X accounts into weekly digests"
+description = "Personal tool that turns selected X accounts into weekly newsletters"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

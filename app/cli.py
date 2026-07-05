@@ -5,7 +5,7 @@ def dev():
   uvicorn.run("app.main:create_app", factory=True, reload=True)
 
 def fetch():
-  """Fetch last complete week, build digests, then drain the like queue (blocking)."""
+  """Fetch last complete week, build newsletters, then drain the like queue (blocking)."""
   from app.env import load_env
   load_env()
   from app import auth, db

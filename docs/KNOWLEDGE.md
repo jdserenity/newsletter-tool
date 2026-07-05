@@ -41,10 +41,10 @@ Published per-user limits vary by legacy plan tier (Pro / Basic / Free). Pay-per
 | Follow | `POST /2/users/:id/following` | 50 / 15 min | 5 / 15 min |
 | Like | `POST /2/users/:id/likes` | 1000 / 24 hours | 200 / 24 hours |
 
-Follow uses a 15-minute window; likes use a 24-hour window. Exceeding either returns HTTP 429; response headers include `x-rate-limit-remaining` and `x-rate-limit-reset`. X Developer Guidelines state likes must be user-initiated (no bulk/auto-like products); this app likes only digest items the owner already chose to track — still automate conservatively. Re-follow is handled by POSTing follow directly (cheaper than paginating the full following list). Likes drain in one background thread: first like immediately after enqueue, then 60s ± 1–20s sleep between each until the queue is empty.
+Follow uses a 15-minute window; likes use a 24-hour window. Exceeding either returns HTTP 429; response headers include `x-rate-limit-remaining` and `x-rate-limit-reset`. X Developer Guidelines state likes must be user-initiated (no bulk/auto-like products); this app likes only newsletter items the owner already chose to track — still automate conservatively. Re-follow is handled by POSTing follow directly (cheaper than paginating the full following list). Likes drain in one background thread: first like immediately after enqueue, then 60s ± 1–20s sleep between each until the queue is empty.
 
 ## Manual weekly fetch
 ```bash
-news-fetch
+news-manual-fetch
 ```
-Fetches the last complete week, builds digests, then drains the like queue in the foreground (paced). Re-run `./scripts/setup.sh` or `pip install -e .` once after pulling if `news-fetch` is not found.
+Fetches the last complete week, builds newsletters, then drains the like queue in the foreground (paced). Re-run `./scripts/setup.sh` or `pip install -e .` once after pulling if `news-manual-fetch` is not found.

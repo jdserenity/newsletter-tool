@@ -11,10 +11,10 @@ source venv/bin/activate
 news-dev
 ```
 
-Manual weekly fetch (build digests + paced likes):
+Manual weekly fetch (build newsletters + paced likes):
 
 ```bash
-news-fetch
+news-manual-fetch
 ```
 
 ## Test

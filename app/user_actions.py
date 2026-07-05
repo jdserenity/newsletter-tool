@@ -53,8 +53,8 @@ def follow_tracked_account(conn, actions_client, access_token, owner_user_id, ac
     actions_client.follow_user(access_token, owner_user_id, target_id)
   except Exception: pass
 
-def enqueue_digest_likes(conn, items):
-  """Queue digest tweets for background liking. Skips already-liked and already-queued."""
+def enqueue_newsletter_likes(conn, items):
+  """Queue newsletter tweets for background liking. Skips already-liked and already-queued."""
   if not items: return 0
   enqueued = 0
   for item in items:

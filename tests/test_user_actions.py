@@ -4,7 +4,7 @@ import pytest
 from app import auth, db
 from app.fetch.client import XClient
 from app.user_actions import (
-  UserActionsClient, drain_like_queue, enqueue_digest_likes, follow_tracked_account,
+  UserActionsClient, drain_like_queue, enqueue_newsletter_likes, follow_tracked_account,
   like_delay_seconds, resolve_target_x_user_id, resume_like_drain_if_needed,
 )
 
@@ -69,15 +69,15 @@ def test_follow_tracked_account_posts_follow(conn):
   follow_tracked_account(conn, client, "tok", "99", db.get_account(conn, account_id=aid))
   assert http.posts[0][0] == "/users/99/following"
 
-def test_enqueue_digest_likes_skips_liked_and_queued(conn):
+def test_enqueue_newsletter_likes_skips_liked_and_queued(conn):
   db.mark_tweet_liked(conn, "1"); db.enqueue_like(conn, "2")
   items = [{"tweet_id": "1"}, {"tweet_id": "2"}, {"tweet_id": "3"}]
-  assert enqueue_digest_likes(conn, items) == 1
+  assert enqueue_newsletter_likes(conn, items) == 1
   assert db.like_queue_size(conn) == 2
   assert db.peek_like_queue(conn) == "2"
 
-def test_enqueue_digest_likes_noop_without_items(conn):
-  assert enqueue_digest_likes(conn, []) == 0
+def test_enqueue_newsletter_likes_noop_without_items(conn):
+  assert enqueue_newsletter_likes(conn, []) == 0
 
 def test_drain_like_queue_likes_first_immediately_then_waits(conn, monkeypatch):
   db.save_oauth_session(conn, "99", "at", "rt")
