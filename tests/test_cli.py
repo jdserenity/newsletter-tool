@@ -1,4 +1,4 @@
-from app.cli import dev, fetch
+from app.cli import db_status, dev, fetch
 
 def test_dev_starts_uvicorn_with_reload(monkeypatch):
   uvicorn_calls = []
@@ -36,3 +36,38 @@ def test_fetch_reports_empty_accounts(monkeypatch, capsys):
   monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn: [])
   fetch()
   assert "No active accounts." in capsys.readouterr().out
+
+def test_db_status_prints_overview(monkeypatch, capsys):
+  class FakeConn:
+    def close(self): pass
+  overview = {
+    "week_start": "2026-06-22T00:00:00Z", "week_end": "2026-06-29T00:00:00Z",
+    "tweet_count": 5, "edition_count": 2, "api_cost_usd": 0.065, "like_queue_size": 0,
+    "oauth_signed_in": True, "accounts": [
+      {"handle": "karpathy", "display_name": "Andrej Karpathy", "active": True,
+       "tweet_count": 1, "tweets_in_week": 1, "edition_items": 1, "needs_rebuild": False, "total_cost_usd": 0.015},
+    ],
+  }
+  monkeypatch.setattr("app.cli._open_db", lambda: ("/tmp/news.db", FakeConn()))
+  monkeypatch.setattr("app.db.database_overview", lambda conn: overview)
+  db_status()
+  out = capsys.readouterr().out
+  assert "Database: /tmp/news.db" in out
+  assert "@karpathy" in out
+  assert "1 in newsletter" in out
+
+def test_db_status_rebuild_flag(monkeypatch, capsys):
+  class FakeConn:
+    def close(self): pass
+  rebuilt = []
+  monkeypatch.setattr("app.cli._open_db", lambda: ("/tmp/news.db", FakeConn()))
+  monkeypatch.setattr("app.fetch.runner.rebuild_editions", lambda conn: rebuilt.append(1) or [("karpathy", 1)])
+  monkeypatch.setattr("app.db.database_overview", lambda conn: {
+    "week_start": "2026-06-22T00:00:00Z", "week_end": "2026-06-29T00:00:00Z",
+    "tweet_count": 1, "edition_count": 1, "api_cost_usd": 0.01, "like_queue_size": 0,
+    "oauth_signed_in": False, "accounts": [],
+  })
+  db_status(rebuild=True)
+  out = capsys.readouterr().out
+  assert rebuilt == [1]
+  assert "Rebuilt @karpathy: 1 items" in out

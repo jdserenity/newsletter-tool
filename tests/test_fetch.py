@@ -1,6 +1,6 @@
 from app import db
 from app.fetch.client import XClient, classify_tweet, COST_PER_POST_READ, COST_PER_USER_READ
-from app.fetch.runner import fetch_account_week, run_weekly_fetch, week_bounds
+from app.fetch.runner import fetch_account_week, rebuild_editions, run_weekly_fetch, week_bounds
 from datetime import datetime, timezone
 
 class FakeResponse:
@@ -76,3 +76,11 @@ def test_week_bounds_is_last_complete_monday_week():
   now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)  # a Sunday
   start, end = week_bounds(now)
   assert start == "2026-06-22T00:00:00Z"; assert end == "2026-06-29T00:00:00Z"
+
+def test_rebuild_editions_from_stored_tweets(conn):
+  aid = db.add_account(conn, "alice")
+  db.save_tweets(conn, aid, [{"id": "1", "text": "hi", "created_at": "2026-06-23T12:00:00Z", "kind": "post"}])
+  now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)
+  results = rebuild_editions(conn, now=now)
+  assert results == [("alice", 1)]
+  assert db.edition_for_week(conn, aid, "2026-06-22T00:00:00Z")["item_count"] == 1

@@ -65,6 +65,24 @@ def test_save_edition_upserts_per_week(conn):
   editions = db.list_editions(conn, aid)
   assert len(editions) == 1; assert editions[0]["item_count"] == 2; assert editions[0]["cost_usd"] == 0.07
 
+def test_edition_for_week(conn):
+  aid = db.add_account(conn, "alice")
+  db.save_edition(conn, aid, "2026-06-22T00:00:00Z", "2026-06-29T00:00:00Z", [{"a": 1}], 0.05)
+  assert db.edition_for_week(conn, aid, "2026-06-22T00:00:00Z")["item_count"] == 1
+  assert db.edition_for_week(conn, aid, "2026-06-29T00:00:00Z") is None
+
+def test_database_overview_flags_missing_edition(conn):
+  from app.fetch.runner import week_bounds
+  ws, we = week_bounds()
+  aid = db.add_account(conn, "alice")
+  db.save_tweets(conn, aid, [{"id": "1", "text": "hi", "created_at": "2026-06-23T12:00:00Z", "kind": "post"}])
+  o = db.database_overview(conn, ws, we)
+  assert o["accounts"][0]["needs_rebuild"] is True
+  assert o["accounts"][0]["tweets_in_week"] == 1
+  db.save_edition(conn, aid, ws, we, [{"tweet_id": "1"}], 0.01)
+  o = db.database_overview(conn, ws, we)
+  assert o["accounts"][0]["needs_rebuild"] is False
+
 def test_migrate_digests_table_to_editions(tmp_path):
   import sqlite3
   path = tmp_path / "legacy.db"

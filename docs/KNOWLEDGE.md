@@ -48,3 +48,9 @@ Follow uses a 15-minute window; likes use a 24-hour window. Exceeding either ret
 news-manual-fetch
 ```
 Fetches the last complete week, builds newsletters, then drains the like queue in the foreground (paced). Re-run `./scripts/setup.sh` or `pip install -e .` once after pulling if `news-manual-fetch` is not found.
+
+## Database overview
+```bash
+news-db-status
+```
+Prints DB path, current newsletter week, per-account tweet/edition counts, API cost, like-queue size, and OAuth status. If tweets were stored but no newsletter row exists for that week (the homepage reads `editions`, not raw `tweets`), the command warns and suggests `news-db-status --rebuild` to build newsletters from stored tweets without calling the X API.

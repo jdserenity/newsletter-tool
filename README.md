@@ -17,6 +17,13 @@ Manual weekly fetch (build newsletters + paced likes):
 news-manual-fetch
 ```
 
+Database overview (counts, editions, API cost):
+
+```bash
+news-db-status
+news-db-status --rebuild   # rebuild newsletters from stored tweets (no API calls)
+```
+
 ## Test
 
 ```bash

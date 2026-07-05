@@ -47,3 +47,17 @@ def run_weekly_fetch(conn, client=None, now=None, db_path=None):
     results.append((account["handle"], cost))
   if db_path and enqueued > 0: start_like_drain(db_path)
   return results
+
+def rebuild_editions(conn, now=None):
+  """Build newsletter editions from stored tweets (no X API calls). Preserves edition cost when re-building the same week."""
+  from app.newsletter import build_newsletter
+  week_start, week_end = week_bounds(now)
+  results = []
+  for account in db.list_accounts(conn):
+    prev = db.edition_for_week(conn, account["id"], week_start)
+    cost = prev["cost_usd"] if prev else 0.0
+    tweets = db.tweets_for_week(conn, account["id"], week_start, week_end)
+    items = build_newsletter(tweets, account)
+    db.save_edition(conn, account["id"], week_start, week_end, items, cost)
+    results.append((account["handle"], len(items)))
+  return results

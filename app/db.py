@@ -214,3 +214,47 @@ def dequeue_like(conn, tweet_id):
 
 def like_queue_size(conn):
   return conn.execute("SELECT COUNT(*) AS c FROM like_queue").fetchone()["c"]
+
+# --- overview (CLI status) ---
+
+def edition_for_week(conn, account_id, week_start):
+  row = conn.execute(
+    "SELECT * FROM editions WHERE account_id = ? AND week_start = ?", (account_id, week_start)).fetchone()
+  return dict(row) if row else None
+
+def database_overview(conn, week_start=None, week_end=None):
+  """Summary stats for the current newsletter week (or an explicit week window)."""
+  if week_start is None or week_end is None:
+    from app.fetch.runner import week_bounds
+    week_start, week_end = week_bounds()
+  accounts = []
+  for a in list_accounts(conn, active_only=False):
+    tweet_count = conn.execute("SELECT COUNT(*) AS c FROM tweets WHERE account_id = ?", (a["id"],)).fetchone()["c"]
+    tweets_in_week = len(tweets_for_week(conn, a["id"], week_start, week_end))
+    edition = edition_for_week(conn, a["id"], week_start)
+    accounts.append({
+      "id": a["id"], "handle": a["handle"], "display_name": a["display_name"], "active": bool(a["active"]),
+      "tweet_count": tweet_count, "tweets_in_week": tweets_in_week,
+      "edition_items": edition["item_count"] if edition else None,
+      "edition_cost_usd": edition["cost_usd"] if edition else None,
+      "needs_rebuild": tweets_in_week > 0 and edition is None,
+      "total_cost_usd": cost_for_account(conn, a["id"]),
+    })
+  totals = conn.execute(
+    """SELECT
+         (SELECT COUNT(*) FROM accounts WHERE active = 1) AS active_accounts,
+         (SELECT COUNT(*) FROM accounts WHERE active = 0) AS inactive_accounts,
+         (SELECT COUNT(*) FROM tweets) AS tweets,
+         (SELECT COUNT(*) FROM editions) AS editions,
+         (SELECT COALESCE(SUM(cost_usd), 0) FROM api_calls) AS api_cost_usd""").fetchone()
+  return {
+    "week_start": week_start, "week_end": week_end,
+    "accounts": accounts,
+    "active_accounts": totals["active_accounts"],
+    "inactive_accounts": totals["inactive_accounts"],
+    "tweet_count": totals["tweets"],
+    "edition_count": totals["editions"],
+    "api_cost_usd": totals["api_cost_usd"],
+    "like_queue_size": like_queue_size(conn),
+    "oauth_signed_in": get_oauth_session(conn) is not None,
+  }
