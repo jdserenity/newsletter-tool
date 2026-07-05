@@ -1,6 +1,6 @@
 # newsletter-tool
 
-Personal tool that turns selected X accounts into clean weekly digests, viewable on the web and via RSS.
+Personal tool that turns selected X accounts into clean weekly newsletters, viewable on the web and via RSS.
 
 ## Run
 

@@ -58,9 +58,26 @@ def test_cost_for_account(conn):
   db.record_api_call(conn, aid, "users/by/username", 1, 0.01)
   assert abs(db.cost_for_account(conn, aid) - 0.06) < 1e-9
 
-def test_save_digest_upserts_per_week(conn):
+def test_save_edition_upserts_per_week(conn):
   aid = db.add_account(conn, "alice")
-  db.save_digest(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", [{"a": 1}], 0.05)
-  db.save_digest(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", [{"a": 1}, {"b": 2}], 0.07)
-  digests = db.list_digests(conn, aid)
-  assert len(digests) == 1; assert digests[0]["item_count"] == 2; assert digests[0]["cost_usd"] == 0.07
+  db.save_edition(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", [{"a": 1}], 0.05)
+  db.save_edition(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", [{"a": 1}, {"b": 2}], 0.07)
+  editions = db.list_editions(conn, aid)
+  assert len(editions) == 1; assert editions[0]["item_count"] == 2; assert editions[0]["cost_usd"] == 0.07
+
+def test_migrate_digests_table_to_editions(tmp_path):
+  import sqlite3
+  path = tmp_path / "legacy.db"
+  c = sqlite3.connect(str(path))
+  c.executescript("""
+    CREATE TABLE digests (
+      id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, week_start TEXT NOT NULL,
+      week_end TEXT NOT NULL, item_count INTEGER NOT NULL, cost_usd REAL NOT NULL DEFAULT 0,
+      content_json TEXT NOT NULL, built_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(account_id, week_start)
+    );
+  """)
+  c.commit(); c.close()
+  conn = db.connect(str(path))
+  tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+  assert "editions" in tables; assert "digests" not in tables

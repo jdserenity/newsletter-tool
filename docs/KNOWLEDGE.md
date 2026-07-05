@@ -14,10 +14,12 @@ mkdir -p ~/.local/share/newsletter-tool
 mv /path/to/old/data/newsletter.db ~/.local/share/newsletter-tool/
 ```
 
-## Fetch vs digest filtering
-Replies and retweets can be excluded at the API via the `exclude` parameter — those tweets are never fetched and never billed. Quote tweets cannot be excluded server-side; they are always fetched and filtered in the digest builder when `include_quotes` is off.
+## Fetch vs newsletter filtering
+Replies and retweets can be excluded at the API via the `exclude` parameter — those tweets are never fetched and never billed. Quote tweets cannot be excluded server-side; they are always fetched and filtered in the newsletter builder when `include_quotes` is off.
 
-## Week boundaries
+## Terminology
+The product is **Newsletter Tool**. Never use the word "digest" in code, templates, or docs. Weekly snapshots live in the `editions` table. The old `digests` table is renamed automatically on connect.
+
 `week_bounds()` in `app/fetch/runner.py` uses the most recent complete Monday-to-Monday window in UTC.
 
 ## Tests

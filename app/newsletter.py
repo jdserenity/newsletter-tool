@@ -1,10 +1,10 @@
-"""Digest builder: pure logic, no network or DB. Stored tweets + account settings -> digest items."""
+"""Newsletter builder: pure logic, no network or DB. Stored tweets + account settings -> newsletter items."""
 import json
 
-def build_digest(tweets, account):
+def build_newsletter(tweets, account):
   """Filter stored tweets by the account's settings and shape them for rendering.
   Settings also gate fetching, but filtering here too means a settings change
-  re-shapes existing digests without refetching."""
+  re-shapes existing newsletters without refetching."""
   items = []
   for t in tweets:
     kind = t.get("kind", "post")
