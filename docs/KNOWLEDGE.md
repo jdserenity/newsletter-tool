@@ -23,11 +23,6 @@ Replies and retweets can be excluded at the API via the `exclude` parameter — 
 ## Tests
 Run from repo root: `pytest` (or `venv/bin/python -m pytest`). Web tests use `TestClient` with scheduler disabled. Fetch tests use a fake HTTP client — no real API calls in CI.
 
-## Manual weekly fetch
-```bash
-python -c "from app.scheduler import run_job; print(run_job())"
-```
-
 ## X OAuth sign-in (web app)
 - Callback URL in `.env` (`X_OAUTH_CALLBACK_URL`) must match a Callback URL in the X Developer Console **exactly** (including `http` vs `https` and port).
 - `SESSION_SECRET` signs the browser cookie; generate with `openssl rand -hex 32` if you need a value.
@@ -35,3 +30,18 @@ python -c "from app.scheduler import run_job; print(run_job())"
 - Web tests disable auth (`auth_enabled=False`); auth behavior is covered in `tests/test_auth.py`.
 - **Keys and tokens ≠ user auth setup.** Client ID/Secret on the Keys page are necessary but not sufficient. Open **OAuth 2.0 Keys → Edit settings** and enable OAuth 2.0, choose **Web App**, set Callback URI and Website URL, then save. The “Read and write” line under OAuth 1.0 Access Token on the Keys page does not configure OAuth 2.0.
 - Immediate failure on X’s page (before a login form) usually means the OAuth 2.0 Edit settings page was never completed or the callback URI there does not match `X_OAUTH_CALLBACK_URL`.
+
+## Owner follow/like rate limits (official X API docs, 2026)
+Published per-user limits vary by legacy plan tier (Pro / Basic / Free). Pay-per-use developers should confirm limits in the Developer Console; treat Pro numbers as the upper bound until verified.
+
+| Action | Endpoint | Pro (per user) | Basic (per user) |
+| --- | --- | --- | --- |
+| Follow | `POST /2/users/:id/following` | 50 / 15 min | 5 / 15 min |
+| Like | `POST /2/users/:id/likes` | 1000 / 24 hours | 200 / 24 hours |
+
+Follow uses a 15-minute window; likes use a 24-hour window. Exceeding either returns HTTP 429; response headers include `x-rate-limit-remaining` and `x-rate-limit-reset`. X Developer Guidelines state likes must be user-initiated (no bulk/auto-like products); this app likes only digest items the owner already chose to track — still automate conservatively. Re-follow is handled by POSTing follow directly (cheaper than paginating the full following list).
+
+## Manual weekly fetch
+```bash
+python -c "from app.scheduler import run_job; print(run_job())"
+```
