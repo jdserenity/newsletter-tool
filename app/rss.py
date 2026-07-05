@@ -2,13 +2,20 @@
 import json
 from xml.sax.saxutils import escape
 
+def _media_html(media):
+  parts = []
+  for m in media or []:
+    url = escape(m.get("url") or ""); alt = escape(m.get("alt") or "")
+    if url: parts.append(f'<br><img src="{url}" alt="{alt}">')
+  return "".join(parts)
+
 def item_description_html(item):
   """Build escaped HTML description for one newsletter item, including inline media."""
-  parts = [escape(item.get("text") or "")]
-  for m in item.get("media") or []:
-    url = escape(m.get("url") or "")
-    alt = escape(m.get("alt") or "")
-    if url: parts.append(f'<br><img src="{url}" alt="{alt}">')
+  parts = [escape(item.get("text") or ""), _media_html(item.get("media"))]
+  q = item.get("quoted")
+  if q:
+    parts.append(f'<br><blockquote>{escape(q.get("text") or "")}</blockquote>')
+    parts.append(_media_html(q.get("media")))
   return "".join(parts)
 
 def newsletter_feed(account, editions, base_url):

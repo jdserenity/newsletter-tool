@@ -103,6 +103,20 @@ def test_edition_page_renders_media(client):
   assert 'src="https://pbs.twimg.com/media/x.jpg?name=medium"' in r.text
   assert 'alt="sky"' in r.text
 
+def test_edition_page_renders_quoted_media(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [{"tweet_id": "2", "kind": "quote", "text": "my take", "created_at": "2026-06-30T10:00:00Z",
+            "url": "https://x.com/alice/status/2", "likes": 1, "reposts": 0,
+            "quoted": {"tweet_id": "999", "text": "bob pic", "url": "https://x.com/i/status/999",
+                       "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/q.jpg?name=medium", "alt": ""}]}}]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.02)
+  eid = db.list_editions(c)[0]["id"]
+  r = client.get(f"/editions/{eid}")
+  assert 'class="quoted-tweet"' in r.text
+  assert "bob pic" in r.text
+  assert 'src="https://pbs.twimg.com/media/q.jpg?name=medium"' in r.text
+
 def test_rss_feed(client):
   aid = _seed_edition(client.db_path)
   r = client.get(f"/feeds/{aid}.xml")

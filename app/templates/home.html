@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_tweet_macros.html" import tweet_media, quoted_block %}
 {% block content %}
 <div class="carousel" id="newsletter-carousel">
   {% for card in cards %}
@@ -41,16 +42,8 @@
       {% for item in card.entries %}
       <div class="tweet">
         <div class="tweet-text">{{ item.text }}</div>
-        {% if item.media %}
-        <div class="tweet-media">
-          {% for m in item.media %}
-          <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">
-            <img src="{{ m.url }}" alt="{{ m.alt }}" loading="lazy">
-          </a>
-          {% if m.type != "photo" %}<span class="media-kind">{{ m.type }} · view on X</span>{% endif %}
-          {% endfor %}
-        </div>
-        {% endif %}
+        {{ tweet_media(item.media, item.url) }}
+        {{ quoted_block(item.quoted) }}
         <div class="meta">
           <span class="pill">{{ item.kind }}</span>
           {{ item.created_at[:16].replace("T", " · ") }} ·

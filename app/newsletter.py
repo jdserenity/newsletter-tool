@@ -40,6 +40,16 @@ def media_for_display(raw):
     items.append({"type": m.get("type"), "url": url, "alt": m.get("alt_text") or ""})
   return items
 
+def quoted_for_display(raw):
+  """Shape stored quoted_tweet blob for rendering, or None."""
+  qt = raw.get("quoted_tweet")
+  if not qt: return None
+  return {
+    "tweet_id": qt["id"],
+    "text": clean_tweet_text(qt.get("text") or "", qt),
+    "url": f"https://x.com/i/status/{qt['id']}",
+    "media": media_for_display(qt)}
+
 def build_newsletter(tweets, account):
   """Filter stored tweets by the account's settings and shape them for rendering.
   Settings also gate fetching, but filtering here too means a settings change
@@ -52,11 +62,14 @@ def build_newsletter(tweets, account):
     if kind == "retweet" and not account["include_retweets"]: continue
     raw = json.loads(t["raw_json"]) if isinstance(t.get("raw_json"), str) else t.get("raw_json", {})
     metrics = raw.get("public_metrics", {})
-    items.append({
+    item = {
       "tweet_id": t["tweet_id"], "kind": kind,
       "text": clean_tweet_text(t["text"], raw), "created_at": t["created_at"],
       "url": f"https://x.com/{account['handle']}/status/{t['tweet_id']}",
       "likes": metrics.get("like_count", 0), "reposts": metrics.get("retweet_count", 0),
-      "media": media_for_display(raw)})
+      "media": media_for_display(raw)}
+    quoted = quoted_for_display(raw)
+    if quoted: item["quoted"] = quoted
+    items.append(item)
   items.sort(key=lambda i: i["created_at"])
   return items

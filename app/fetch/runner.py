@@ -22,10 +22,10 @@ def fetch_account_week(conn, client, account, week_start, week_end):
     db.record_api_call(conn, account["id"], "users/by/username", 1, c); cost += c
     db.set_account_identity(conn, account["id"], user["id"], user.get("name", account["handle"]))
     account = db.get_account(conn, account_id=account["id"])
-  tweets, c = client.get_user_tweets(
+  tweets, c, units = client.get_user_tweets(
     account["x_user_id"], week_start, week_end,
     include_replies=bool(account["include_replies"]), include_retweets=bool(account["include_retweets"]))
-  db.record_api_call(conn, account["id"], "users/:id/tweets", len(tweets), c); cost += c
+  db.record_api_call(conn, account["id"], "users/:id/tweets", units, c); cost += c
   for t in tweets: t["kind"] = classify_tweet(t)
   db.save_tweets(conn, account["id"], tweets)
   return cost

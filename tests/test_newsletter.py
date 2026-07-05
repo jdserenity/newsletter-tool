@@ -1,5 +1,5 @@
 import json
-from app.newsletter import build_newsletter, clean_tweet_text, media_for_display
+from app.newsletter import build_newsletter, clean_tweet_text, media_for_display, quoted_for_display
 from tests.conftest import make_tweet
 
 ACCOUNT = {"handle": "alice", "include_quotes": 1, "include_replies": 0, "include_retweets": 0}
@@ -61,3 +61,29 @@ def test_build_newsletter_includes_media_and_strips_tco():
   assert items[0]["text"] == "sunset pic"
   assert len(items[0]["media"]) == 1
   assert "t.co" not in items[0]["text"]
+
+QUOTE_RAW = {
+  "id": "2", "text": "my take", "created_at": "2026-07-01T10:00:00Z",
+  "public_metrics": {"like_count": 1, "retweet_count": 0},
+  "referenced_tweets": [{"type": "quoted", "id": "999"}],
+  "quoted_tweet": {
+    "id": "999", "text": "bob pic https://t.co/qpic",
+    "entities": {"urls": [{"start": 8, "end": 28, "url": "https://t.co/qpic", "media_key": "3_999",
+                           "expanded_url": "https://pic.twitter.com/q"}]},
+    "attachments": {"media_keys": ["3_999"]},
+    "media_expanded": [{"media_key": "3_999", "type": "photo", "url": "https://pbs.twimg.com/media/q.jpg"}],
+  },
+}
+
+def test_quoted_for_display_strips_tco_and_includes_media():
+  q = quoted_for_display(QUOTE_RAW)
+  assert q["text"] == "bob pic"
+  assert q["url"] == "https://x.com/i/status/999"
+  assert len(q["media"]) == 1
+
+def test_build_newsletter_includes_quoted_block():
+  tweet = {"tweet_id": "2", "kind": "quote", "text": "my take", "created_at": QUOTE_RAW["created_at"],
+           "raw_json": json.dumps(QUOTE_RAW)}
+  items = build_newsletter([tweet], ACCOUNT)
+  assert items[0]["quoted"]["text"] == "bob pic"
+  assert len(items[0]["quoted"]["media"]) == 1
