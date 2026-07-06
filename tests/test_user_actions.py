@@ -68,6 +68,14 @@ def test_follow_tracked_account_posts_follow(conn):
   http = FakeHttp(); client = UserActionsClient(http=http)
   follow_tracked_account(conn, client, "tok", "99", db.get_account(conn, account_id=aid))
   assert http.posts[0][0] == "/users/99/following"
+  assert db.get_account(conn, account_id=aid)["followed_at"] is not None
+
+def test_follow_tracked_account_does_not_clear_existing_followed_at(conn):
+  aid = db.add_account(conn, "alice"); db.set_account_identity(conn, aid, "111", "Alice")
+  db.mark_account_followed(conn, aid)
+  first = db.get_account(conn, account_id=aid)["followed_at"]
+  follow_tracked_account(conn, UserActionsClient(http=FakeHttp()), "tok", "99", db.get_account(conn, account_id=aid))
+  assert db.get_account(conn, account_id=aid)["followed_at"] == first
 
 def test_enqueue_newsletter_likes_skips_liked_and_queued(conn):
   db.mark_tweet_liked(conn, "1"); db.enqueue_like(conn, "2")

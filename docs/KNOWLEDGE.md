@@ -53,7 +53,7 @@ Fetches the last complete week, builds newsletters, then drains the like queue i
 ```bash
 news-db-status
 ```
-Prints DB path, current newsletter week, per-account tweet/edition counts, API cost, like-queue size, and OAuth status.
+Prints DB path, current newsletter week, per-account tweet/edition counts, liked vs stored tweet counts (plus queued likes), follow status, API cost, like-queue size, and OAuth status.
 
 `news-manual-fetch` prints the database path it uses at startup — compare that to the path in `news-db-status` if the web UI and CLI ever look out of sync (e.g. dev server started before `.env` was saved).
 

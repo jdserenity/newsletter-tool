@@ -51,6 +51,7 @@ def follow_tracked_account(conn, actions_client, access_token, owner_user_id, ac
   try:
     target_id = resolve_target_x_user_id(conn, read_client, account)
     actions_client.follow_user(access_token, owner_user_id, target_id)
+    db.mark_account_followed(conn, account["id"])
   except Exception: pass
 
 def enqueue_newsletter_likes(conn, items):

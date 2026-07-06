@@ -16,7 +16,8 @@ def test_home_builds_newsletter_from_stored_tweets_on_load(client):
   c = db.connect(client.db_path)
   aid = db.add_account(c, "karpathy")
   ws, we = week_bounds()
-  db.save_tweets(c, aid, [{"id": "99", "text": "stored tweet", "created_at": "2026-06-23T12:00:00Z", "kind": "post"}])
+  tweet_at = ws[:11] + "T12:00:00Z"  # mid-week so repair_missing_editions picks it up
+  db.save_tweets(c, aid, [{"id": "99", "text": "stored tweet", "created_at": tweet_at, "kind": "post"}])
   r = client.get("/")
   assert r.status_code == 200
   assert "stored tweet" in r.text

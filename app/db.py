@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   include_quotes INTEGER NOT NULL DEFAULT 1,
   include_replies INTEGER NOT NULL DEFAULT 0,
   include_retweets INTEGER NOT NULL DEFAULT 0,
+  followed_at TEXT,
   added_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS tweets (
@@ -88,6 +89,9 @@ def _migrate_schema(conn):
       conn.execute("INSERT OR IGNORE INTO editions SELECT * FROM digests")
       conn.execute("DROP TABLE digests")
     conn.commit()
+  cols = {r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()}
+  if "followed_at" not in cols:
+    conn.execute("ALTER TABLE accounts ADD COLUMN followed_at TEXT"); conn.commit()
   _repair_inflated_api_call_costs(conn)
 
 def _utc_cutoff(now, hours=24):
@@ -141,6 +145,9 @@ def update_settings(conn, account_id, **settings):
 
 def set_account_identity(conn, account_id, x_user_id, display_name):
   conn.execute("UPDATE accounts SET x_user_id = ?, display_name = ? WHERE id = ?", (x_user_id, display_name, account_id)); conn.commit()
+
+def mark_account_followed(conn, account_id):
+  conn.execute("UPDATE accounts SET followed_at = datetime('now') WHERE id = ? AND followed_at IS NULL", (account_id,)); conn.commit()
 
 # --- tweets ---
 
@@ -268,6 +275,18 @@ def dequeue_like(conn, tweet_id):
 def like_queue_size(conn):
   return conn.execute("SELECT COUNT(*) AS c FROM like_queue").fetchone()["c"]
 
+def liked_tweet_count(conn, account_id):
+  return conn.execute(
+    """SELECT COUNT(*) AS c FROM tweets t
+       INNER JOIN liked_tweets l ON l.tweet_id = t.tweet_id
+       WHERE t.account_id = ?""", (account_id,)).fetchone()["c"]
+
+def queued_like_count(conn, account_id):
+  return conn.execute(
+    """SELECT COUNT(*) AS c FROM tweets t
+       INNER JOIN like_queue q ON q.tweet_id = t.tweet_id
+       WHERE t.account_id = ?""", (account_id,)).fetchone()["c"]
+
 # --- overview (CLI status) ---
 
 def edition_for_week(conn, account_id, week_start):
@@ -288,6 +307,9 @@ def database_overview(conn, week_start=None, week_end=None):
     accounts.append({
       "id": a["id"], "handle": a["handle"], "display_name": a["display_name"], "active": bool(a["active"]),
       "tweet_count": tweet_count, "tweets_in_week": tweets_in_week,
+      "liked_count": liked_tweet_count(conn, a["id"]),
+      "queued_like_count": queued_like_count(conn, a["id"]),
+      "followed": bool(a.get("followed_at")),
       "edition_items": edition["item_count"] if edition else None,
       "edition_cost_usd": edition["cost_usd"] if edition else None,
       "total_cost_usd": cost_for_account(conn, a["id"]),

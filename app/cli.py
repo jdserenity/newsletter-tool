@@ -25,7 +25,10 @@ def db_status():
       if not a["active"]: continue
       name = f" ({a['display_name']})" if a.get("display_name") else ""
       ed = f"{a['edition_items']} in newsletter" if a["edition_items"] is not None else "no newsletter"
-      print(f"  @{a['handle']}{name}: {a['tweet_count']} stored · {a['tweets_in_week']} this week · {ed} · API ${a['total_cost_usd']:.3f}")
+      liked = f"{a['liked_count']}/{a['tweet_count']} liked"
+      if a["queued_like_count"]: liked += f" ({a['queued_like_count']} queued)"
+      followed = "followed" if a["followed"] else "not followed"
+      print(f"  @{a['handle']}{name}: {a['tweet_count']} stored · {a['tweets_in_week']} this week · {ed} · {liked} · {followed} · API ${a['total_cost_usd']:.3f}")
   finally:
     conn.close()
 

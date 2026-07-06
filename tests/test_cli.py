@@ -60,7 +60,8 @@ def test_db_status_prints_overview(monkeypatch, capsys):
     "tweet_count": 5, "edition_count": 2, "api_cost_usd": 0.065, "like_queue_size": 0,
     "oauth_signed_in": True, "accounts": [
       {"handle": "karpathy", "display_name": "Andrej Karpathy", "active": True,
-       "tweet_count": 1, "tweets_in_week": 1, "edition_items": 1, "needs_rebuild": False, "total_cost_usd": 0.015},
+       "tweet_count": 5, "tweets_in_week": 1, "edition_items": 1, "liked_count": 3,
+       "queued_like_count": 1, "followed": True, "total_cost_usd": 0.015},
     ],
   }
   monkeypatch.setattr("app.cli._open_db", lambda: ("/tmp/news.db", FakeConn()))
@@ -70,3 +71,5 @@ def test_db_status_prints_overview(monkeypatch, capsys):
   assert "Database: /tmp/news.db" in out
   assert "@karpathy" in out
   assert "1 in newsletter" in out
+  assert "3/5 liked (1 queued)" in out
+  assert "followed" in out
