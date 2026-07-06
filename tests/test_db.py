@@ -98,14 +98,18 @@ def test_database_overview_reports_missing_edition(conn):
   ws, we = "2026-06-22T00:00:00Z", "2026-06-29T00:00:00Z"
   aid = db.add_account(conn, "alice")
   db.save_tweets(conn, aid, [{"id": "1", "text": "hi", "created_at": "2026-06-23T12:00:00Z", "kind": "post"}])
-  o = db.database_overview(conn, ws, we)
+  fetch_ws, fetch_we = "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z"
+  o = db.database_overview(conn, fetch_ws, fetch_we)
   assert o["accounts"][0]["edition_items"] is None
-  assert o["accounts"][0]["tweets_in_week"] == 1
+  assert o["accounts"][0]["tweets_in_week"] == 0  # no edition yet; fetch week has no tweets
   assert o["accounts"][0]["liked_count"] == 0
   assert o["accounts"][0]["followed"] is False
   db.save_edition(conn, aid, ws, we, [{"tweet_id": "1"}], 0.01)
-  o = db.database_overview(conn, ws, we)
-  assert o["accounts"][0]["edition_items"] == 1
+  o = db.database_overview(conn, fetch_ws, fetch_we)
+  a = o["accounts"][0]
+  assert a["edition_items"] == 1
+  assert a["tweets_in_week"] == 1
+  assert a["edition_week_start"] == ws
 
 def test_liked_and_queued_counts_per_account(conn):
   aid = db.add_account(conn, "alice")

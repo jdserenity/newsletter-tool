@@ -45,14 +45,39 @@ def resolve_target_x_user_id(conn, read_client, account):
   return user["id"]
 
 def follow_tracked_account(conn, actions_client, access_token, owner_user_id, account, read_client=None):
-  """Follow a tracked account from the owner's X account. Best-effort; errors are swallowed."""
-  if not access_token or not owner_user_id: return
+  """Follow a tracked account from the owner's X account. Returns True on success."""
+  if not access_token or not owner_user_id: return False
+  if account.get("followed_at"): return True
   read_client = read_client or XClient()
   try:
     target_id = resolve_target_x_user_id(conn, read_client, account)
     actions_client.follow_user(access_token, owner_user_id, target_id)
     db.mark_account_followed(conn, account["id"])
-  except Exception: pass
+    return True
+  except Exception:
+    return False
+
+def retry_pending_follows(conn, access_token, owner_user_id, actions_client=None, read_client=None):
+  """Follow every active tracked account not yet marked followed."""
+  if not access_token or not owner_user_id: return 0
+  actions_client = actions_client or UserActionsClient()
+  read_client = read_client or XClient()
+  followed = 0
+  for account in db.accounts_pending_follow(conn):
+    if follow_tracked_account(conn, actions_client, access_token, owner_user_id, account, read_client=read_client):
+      followed += 1
+  return followed
+
+def retry_pending_follows_on_startup(db_path):
+  """Retry follows on startup when OAuth is saved in the DB."""
+  conn = db.connect(db_path)
+  try:
+    auth_config = auth.AuthConfig.from_env()
+    if not auth_config.enabled: return 0
+    access_token, owner_id = auth.get_valid_access_token(conn, auth_config)
+    return retry_pending_follows(conn, access_token, owner_id) if access_token and owner_id else 0
+  finally:
+    conn.close()
 
 def enqueue_newsletter_likes(conn, items):
   """Queue newsletter tweets for background liking. Skips already-liked and already-queued."""

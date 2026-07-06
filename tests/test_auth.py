@@ -108,6 +108,8 @@ def test_add_account_follows_from_owner_session(auth_client, monkeypatch):
 def test_home_persists_oauth_and_resumes_like_drain(auth_client, monkeypatch):
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "user-at", "refresh_token": "user-rt"})
   monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "99", "username": "owner", "name": "Owner"})
+  monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
+    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
   login = auth_client.get("/auth/login/start", follow_redirects=False)
   state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
   auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
@@ -119,6 +121,22 @@ def test_home_persists_oauth_and_resumes_like_drain(auth_client, monkeypatch):
   row = db.get_oauth_session(c)
   assert row["refresh_token"] == "user-rt"
   assert started == [auth_client.app.state.db_path]
+
+def test_home_retries_pending_follows(auth_client, monkeypatch):
+  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "user-at", "refresh_token": "user-rt"})
+  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "99", "username": "owner", "name": "Owner"})
+  monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
+    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
+  login = auth_client.get("/auth/login/start", follow_redirects=False)
+  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+  auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
+  c = db.connect(auth_client.app.state.db_path)
+  aid = db.add_account(c, "pending"); db.set_account_identity(c, aid, "111", "Pending")
+  retried = []
+  monkeypatch.setattr("app.main.retry_pending_follows", lambda conn, token, owner_id: retried.append(owner_id) or 1)
+  monkeypatch.setattr("app.main.resume_like_drain_if_needed", lambda p: None)
+  auth_client.get("/")
+  assert retried == ["99"]
 
 def test_logout_clears_session(auth_client, monkeypatch):
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "at", "refresh_token": "rt"})

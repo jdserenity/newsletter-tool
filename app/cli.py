@@ -14,9 +14,11 @@ def db_status():
   try:
     o = db.database_overview(conn)
     print(f"Database: {path}")
-    print(f"Week: {o['week_start'][:10]} → {o['week_end'][:10]}")
+    print(f"Fetch week: {o['week_start'][:10]} → {o['week_end'][:10]}")
+    pending_follows = o.get("pending_follow_count", 0)
+    follow_bit = f" · {pending_follows} unfollowed" if pending_follows else ""
     print(f"Totals: {o['tweet_count']} tweets · {o['edition_count']} editions · "
-          f"${o['api_cost_usd']:.3f} API · {o['like_queue_size']} queued likes · "
+          f"${o['api_cost_usd']:.3f} API · {o['like_queue_size']} queued likes{follow_bit} · "
           f"OAuth {'yes' if o['oauth_signed_in'] else 'no'}")
     active = sum(1 for a in o["accounts"] if a["active"])
     inactive = sum(1 for a in o["accounts"] if not a["active"])
@@ -24,11 +26,15 @@ def db_status():
     for a in o["accounts"]:
       if not a["active"]: continue
       name = f" ({a['display_name']})" if a.get("display_name") else ""
-      ed = f"{a['edition_items']} in newsletter" if a["edition_items"] is not None else "no newsletter"
+      if a["edition_items"] is not None:
+        wk = a["edition_week_start"][:10] if a.get("edition_week_start") else "?"
+        ed = f"{a['tweets_in_week']} tweets · {a['edition_items']} in newsletter ({wk})"
+      else:
+        ed = f"{a['tweets_in_week']} in fetch week · no newsletter"
       liked = f"{a['liked_count']}/{a['tweet_count']} liked"
       if a["queued_like_count"]: liked += f" ({a['queued_like_count']} queued)"
       followed = "followed" if a["followed"] else "not followed"
-      print(f"  @{a['handle']}{name}: {a['tweet_count']} stored · {a['tweets_in_week']} this week · {ed} · {liked} · {followed} · API ${a['total_cost_usd']:.3f}")
+      print(f"  @{a['handle']}{name}: {a['tweet_count']} stored · {ed} · {liked} · {followed} · API ${a['total_cost_usd']:.3f}")
   finally:
     conn.close()
 

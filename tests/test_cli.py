@@ -58,9 +58,10 @@ def test_db_status_prints_overview(monkeypatch, capsys):
   overview = {
     "week_start": "2026-06-22T00:00:00Z", "week_end": "2026-06-29T00:00:00Z",
     "tweet_count": 5, "edition_count": 2, "api_cost_usd": 0.065, "like_queue_size": 0,
-    "oauth_signed_in": True, "accounts": [
+    "pending_follow_count": 0, "oauth_signed_in": True, "accounts": [
       {"handle": "karpathy", "display_name": "Andrej Karpathy", "active": True,
-       "tweet_count": 5, "tweets_in_week": 1, "edition_items": 1, "liked_count": 3,
+       "tweet_count": 5, "tweets_in_week": 1, "edition_week_start": "2026-06-22T00:00:00Z",
+       "edition_week_end": "2026-06-29T00:00:00Z", "edition_items": 1, "liked_count": 3,
        "queued_like_count": 1, "followed": True, "total_cost_usd": 0.015},
     ],
   }
@@ -70,6 +71,6 @@ def test_db_status_prints_overview(monkeypatch, capsys):
   out = capsys.readouterr().out
   assert "Database: /tmp/news.db" in out
   assert "@karpathy" in out
-  assert "1 in newsletter" in out
+  assert "1 tweets · 1 in newsletter (2026-06-22)" in out
   assert "3/5 liked (1 queued)" in out
   assert "followed" in out

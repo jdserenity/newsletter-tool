@@ -14,7 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app import auth, db
 from app.fetch.runner import repair_missing_editions
 from app.scheduler import start_scheduler
-from app.user_actions import UserActionsClient, follow_tracked_account, resume_like_drain_if_needed
+from app.user_actions import UserActionsClient, follow_tracked_account, resume_like_drain_if_needed, retry_pending_follows, retry_pending_follows_on_startup
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -29,6 +29,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   async def lifespan(app):
     scheduler = start_scheduler(path) if with_scheduler else None
     resume_like_drain_if_needed(path)
+    retry_pending_follows_on_startup(path)
     yield
     if scheduler: scheduler.shutdown(wait=False)
 
@@ -48,9 +49,11 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     return templates.TemplateResponse(request, name, ctx)
 
   def after_authenticated_request(c, request: Request):
-    """Persist OAuth for background likes and resume a stalled queue."""
+    """Persist OAuth, retry pending follows, and resume a stalled like queue."""
     if not auth_config.enabled: return
     auth.persist_session_oauth(c, request)
+    token, owner_id = auth.owner_access_token(c, request, auth_config)
+    if token and owner_id: retry_pending_follows(c, token, owner_id)
     resume_like_drain_if_needed(path)
 
   if auth_config.enabled:

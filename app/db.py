@@ -149,6 +149,14 @@ def set_account_identity(conn, account_id, x_user_id, display_name):
 def mark_account_followed(conn, account_id):
   conn.execute("UPDATE accounts SET followed_at = datetime('now') WHERE id = ? AND followed_at IS NULL", (account_id,)); conn.commit()
 
+def accounts_pending_follow(conn):
+  return [dict(r) for r in conn.execute(
+    "SELECT * FROM accounts WHERE active = 1 AND followed_at IS NULL ORDER BY handle").fetchall()]
+
+def pending_follow_count(conn):
+  return conn.execute(
+    "SELECT COUNT(*) AS c FROM accounts WHERE active = 1 AND followed_at IS NULL").fetchone()["c"]
+
 # --- tweets ---
 
 def save_tweets(conn, account_id, tweets, fetched_at=None):
@@ -295,22 +303,30 @@ def edition_for_week(conn, account_id, week_start):
   return dict(row) if row else None
 
 def database_overview(conn, week_start=None, week_end=None):
-  """Summary stats for the current newsletter week (or an explicit week window)."""
+  """Summary stats for CLI status. Per-account newsletter stats use the latest edition."""
   if week_start is None or week_end is None:
     from app.fetch.runner import week_bounds
     week_start, week_end = week_bounds()
   accounts = []
   for a in list_accounts(conn, active_only=False):
     tweet_count = conn.execute("SELECT COUNT(*) AS c FROM tweets WHERE account_id = ?", (a["id"],)).fetchone()["c"]
-    tweets_in_week = len(tweets_for_week(conn, a["id"], week_start, week_end))
-    edition = edition_for_week(conn, a["id"], week_start)
+    edition = latest_edition(conn, a["id"])
+    if edition:
+      ed_ws, ed_we = edition["week_start"], edition["week_end"]
+      tweets_in_week = len(tweets_for_week(conn, a["id"], ed_ws, ed_we))
+      edition_items = edition["item_count"]
+    else:
+      ed_ws = ed_we = None
+      tweets_in_week = len(tweets_for_week(conn, a["id"], week_start, week_end))
+      edition_items = None
     accounts.append({
       "id": a["id"], "handle": a["handle"], "display_name": a["display_name"], "active": bool(a["active"]),
       "tweet_count": tweet_count, "tweets_in_week": tweets_in_week,
+      "edition_week_start": ed_ws, "edition_week_end": ed_we,
       "liked_count": liked_tweet_count(conn, a["id"]),
       "queued_like_count": queued_like_count(conn, a["id"]),
       "followed": bool(a.get("followed_at")),
-      "edition_items": edition["item_count"] if edition else None,
+      "edition_items": edition_items,
       "edition_cost_usd": edition["cost_usd"] if edition else None,
       "total_cost_usd": cost_for_account(conn, a["id"]),
     })
@@ -330,5 +346,6 @@ def database_overview(conn, week_start=None, week_end=None):
     "edition_count": totals["editions"],
     "api_cost_usd": totals["api_cost_usd"],
     "like_queue_size": like_queue_size(conn),
+    "pending_follow_count": pending_follow_count(conn),
     "oauth_signed_in": get_oauth_session(conn) is not None,
   }

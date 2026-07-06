@@ -59,3 +59,7 @@ Prints DB path, current newsletter week, per-account tweet/edition counts, liked
 
 ## Follow and like need OAuth in the database
 Likes drain in a background thread (or via `news-manual-fetch`) using tokens stored in the `oauth_session` table, not the browser cookie alone. Running `news-manual-fetch` can enqueue likes without OAuth saved — `news-db-status` then shows queued likes with `OAuth no`, and nothing gets liked until you sign in via the web app once (homepage load copies session tokens into the DB and resumes the queue). Follow on add-account uses the same refreshed owner token path.
+
+Unfollowed tracked accounts (`followed_at` null) are retried on homepage load and on app startup when OAuth is in the DB — same idea as resuming a stalled like queue.
+
+`news-db-status` per-account newsletter stats use each account's **latest edition** week (same as the homepage), not only the current fetch-target week shown in the header.
