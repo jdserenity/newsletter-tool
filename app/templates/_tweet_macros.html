@@ -2,7 +2,7 @@
 {% if media_list %}
 <div class="tweet-media">
   {% for m in media_list %}
-  <a href="{{ link_url }}" class="media-thumb{% if m.type != 'photo' %} media-thumb-video{% endif %}" target="_blank" rel="noopener noreferrer">
+  <a href="{{ m.link_url or link_url }}" class="media-thumb{% if m.type != 'photo' %} media-thumb-video{% endif %}" target="_blank" rel="noopener noreferrer">
     <img src="{{ m.url }}" alt="{{ m.alt }}" loading="lazy">
     {% if m.type != "photo" %}<span class="media-play" aria-hidden="true"></span>{% endif %}
   </a>

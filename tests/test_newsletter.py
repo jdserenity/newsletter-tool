@@ -51,8 +51,20 @@ def test_media_for_display_photo_adds_size_suffix():
 
 def test_media_for_display_video_uses_preview():
   raw = {"media_expanded": [{"type": "video", "preview_image_url": "https://pbs.twimg.com/thumb.jpg"}]}
-  items = media_for_display(raw)
+  items = media_for_display(raw, "https://x.com/alice/status/42")
   assert items[0]["url"] == "https://pbs.twimg.com/thumb.jpg"
+  assert items[0]["link_url"] == "https://x.com/alice/status/42/video/1"
+
+def test_media_for_display_video_indexes_multiple():
+  raw = {"media_expanded": [
+    {"type": "video", "preview_image_url": "https://pbs.twimg.com/a.jpg"},
+    {"type": "photo", "url": "https://pbs.twimg.com/p.jpg"},
+    {"type": "video", "preview_image_url": "https://pbs.twimg.com/b.jpg"}]}
+  base = "https://x.com/alice/status/42"
+  items = media_for_display(raw, base)
+  assert items[0]["link_url"] == f"{base}/video/1"
+  assert "link_url" not in items[1]
+  assert items[2]["link_url"] == f"{base}/video/2"
 
 def test_build_newsletter_includes_media_and_strips_tco():
   tweet = {"tweet_id": "99", "kind": "post", "text": PHOTO_RAW["text"], "created_at": PHOTO_RAW["created_at"],

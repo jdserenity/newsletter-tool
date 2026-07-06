@@ -50,25 +50,32 @@ def _display_url(m):
     return f"{url}{sep}name=medium"
   return m.get("preview_image_url") or m.get("url") or ""
 
-def media_for_display(raw):
+def _status_url(handle, tweet_id):
+  if handle: return f"https://x.com/{handle}/status/{tweet_id}"
+  return f"https://x.com/i/status/{tweet_id}"
+
+def media_for_display(raw, status_url=None):
   """Shape stored API media objects for HTML/RSS rendering."""
-  items = []
+  items = []; video_n = 0
   for m in raw.get("media_expanded") or []:
     url = _display_url(m)
     if not url: continue
-    items.append({"type": m.get("type"), "url": url, "alt": m.get("alt_text") or ""})
+    mtype = m.get("type")
+    entry = {"type": mtype, "url": url, "alt": m.get("alt_text") or ""}
+    if status_url and mtype in ("video", "animated_gif"):
+      video_n += 1; entry["link_url"] = f"{status_url}/video/{video_n}"
+    items.append(entry)
   return items
 
 def quoted_for_display(raw):
   """Shape stored quoted_tweet blob for rendering, or None."""
   qt = raw.get("quoted_tweet")
   if not qt: return None
-  handle = qt.get("author_handle")
-  tid = qt["id"]
-  url = f"https://x.com/{handle}/status/{tid}" if handle else f"https://x.com/i/status/{tid}"
+  handle = qt.get("author_handle"); tid = qt["id"]
+  url = _status_url(handle, tid)
   out = {
     "tweet_id": tid, "text": clean_tweet_text(qt.get("text") or "", qt),
-    "url": url, "media": media_for_display(qt)}
+    "url": url, "media": media_for_display(qt, url)}
   if handle: out["handle"] = handle
   return out
 
@@ -84,12 +91,13 @@ def build_newsletter(tweets, account):
     if kind == "retweet" and not account["include_retweets"]: continue
     raw = json.loads(t["raw_json"]) if isinstance(t.get("raw_json"), str) else t.get("raw_json", {})
     metrics = raw.get("public_metrics", {})
+    status_url = f"https://x.com/{account['handle']}/status/{t['tweet_id']}"
     item = {
       "tweet_id": t["tweet_id"], "kind": kind,
       "text": clean_tweet_text(t["text"], raw), "created_at": t["created_at"],
-      "url": f"https://x.com/{account['handle']}/status/{t['tweet_id']}",
+      "url": status_url,
       "likes": metrics.get("like_count", 0), "reposts": metrics.get("retweet_count", 0),
-      "media": media_for_display(raw)}
+      "media": media_for_display(raw, status_url)}
     quoted = quoted_for_display(raw)
     if quoted: item["quoted"] = quoted
     items.append(item)
