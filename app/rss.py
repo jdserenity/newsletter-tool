@@ -14,7 +14,8 @@ def item_description_html(item):
   parts = [escape(item.get("text") or ""), _media_html(item.get("media"))]
   q = item.get("quoted")
   if q:
-    parts.append(f'<br><blockquote>{escape(q.get("text") or "")}</blockquote>')
+    who = f"@{q['handle']}: " if q.get("handle") else ""
+    parts.append(f'<br><blockquote>{escape(who + (q.get("text") or ""))}</blockquote>')
     parts.append(_media_html(q.get("media")))
   return "".join(parts)
 

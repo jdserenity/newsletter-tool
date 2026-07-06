@@ -7,9 +7,10 @@ BASE_URL = "https://api.x.com/2"
 COST_PER_POST_READ = 0.005
 COST_PER_USER_READ = 0.010
 
-TWEET_FIELDS = "created_at,referenced_tweets,entities,public_metrics,attachments"
+TWEET_FIELDS = "created_at,referenced_tweets,entities,public_metrics,attachments,author_id"
 MEDIA_FIELDS = "url,preview_image_url,type,alt_text,width,height"
-EXPANSIONS = "attachments.media_keys,referenced_tweets.id,referenced_tweets.id.attachments.media_keys"
+USER_FIELDS = "username"
+EXPANSIONS = "attachments.media_keys,referenced_tweets.id,referenced_tweets.id.attachments.media_keys,referenced_tweets.id.author_id"
 
 def count_post_reads(body):
   """Unique post IDs in data + includes.tweets — each counts toward billing."""
@@ -34,16 +35,20 @@ def attach_media(tweets, includes):
   return tweets
 
 def attach_quoted(tweets, includes):
-  """Merge quoted tweet + its media from includes onto the quoting tweet as quoted_tweet."""
+  """Merge quoted tweet + its media and author from includes onto the quoting tweet."""
   by_id = {t["id"]: t for t in (includes or {}).get("tweets", [])}
   by_key = {m["media_key"]: m for m in (includes or {}).get("media", [])}
+  by_user = {u["id"]: u for u in (includes or {}).get("users", [])}
   for t in tweets:
     ref = next((r for r in (t.get("referenced_tweets") or []) if r.get("type") == "quoted"), None)
     if not ref: continue
     qt = by_id.get(ref["id"])
     if not qt: continue
     keys = _media_keys(qt)
-    t["quoted_tweet"] = {**qt, "media_expanded": [by_key[k] for k in keys if k in by_key]}
+    author = by_user.get(qt.get("author_id")) or {}
+    t["quoted_tweet"] = {
+      **qt, "author_handle": author.get("username"),
+      "media_expanded": [by_key[k] for k in keys if k in by_key]}
   return tweets
 
 def enrich_tweets(page, includes):
@@ -70,7 +75,8 @@ class XClient:
     while True:
       params = {
         "start_time": start_time, "end_time": end_time, "max_results": 100,
-        "tweet.fields": TWEET_FIELDS, "expansions": EXPANSIONS, "media.fields": MEDIA_FIELDS}
+        "tweet.fields": TWEET_FIELDS, "expansions": EXPANSIONS,
+        "media.fields": MEDIA_FIELDS, "user.fields": USER_FIELDS}
       if excludes: params["exclude"] = ",".join(excludes)
       if token: params["pagination_token"] = token
       r = self.http.get(f"/users/{x_user_id}/tweets", params=params); r.raise_for_status()

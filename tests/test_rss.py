@@ -10,9 +10,9 @@ def test_item_description_html_includes_image(conn):
   assert 'alt="sky"' in html
 
 def test_item_description_html_includes_quoted_media(conn):
-  item = {"text": "my take", "quoted": {"text": "bob pic", "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/q.jpg", "alt": ""}]}}
+  item = {"text": "my take", "quoted": {"handle": "bob", "text": "bob pic", "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/q.jpg", "alt": ""}]}}
   html = item_description_html(item)
-  assert "my take" in html; assert "<blockquote>bob pic</blockquote>" in html
+  assert "my take" in html; assert "@bob:" in html; assert "bob pic" in html
   assert "pbs.twimg.com/media/q.jpg" in html
 
 def test_newsletter_feed_description_has_images(conn):

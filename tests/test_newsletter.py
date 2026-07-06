@@ -67,7 +67,7 @@ QUOTE_RAW = {
   "public_metrics": {"like_count": 1, "retweet_count": 0},
   "referenced_tweets": [{"type": "quoted", "id": "999"}],
   "quoted_tweet": {
-    "id": "999", "text": "bob pic https://t.co/qpic",
+    "id": "999", "author_handle": "bob", "text": "bob pic https://t.co/qpic",
     "entities": {"urls": [{"start": 8, "end": 28, "url": "https://t.co/qpic", "media_key": "3_999",
                            "expanded_url": "https://pic.twitter.com/q"}]},
     "attachments": {"media_keys": ["3_999"]},
@@ -78,7 +78,8 @@ QUOTE_RAW = {
 def test_quoted_for_display_strips_tco_and_includes_media():
   q = quoted_for_display(QUOTE_RAW)
   assert q["text"] == "bob pic"
-  assert q["url"] == "https://x.com/i/status/999"
+  assert q["handle"] == "bob"
+  assert q["url"] == "https://x.com/bob/status/999"
   assert len(q["media"]) == 1
 
 def test_clean_tweet_text_strips_quote_tco():
@@ -95,4 +96,5 @@ def test_build_newsletter_includes_quoted_block():
            "raw_json": json.dumps(QUOTE_RAW)}
   items = build_newsletter([tweet], ACCOUNT)
   assert items[0]["quoted"]["text"] == "bob pic"
+  assert items[0]["quoted"]["handle"] == "bob"
   assert len(items[0]["quoted"]["media"]) == 1

@@ -2,10 +2,10 @@
 {% if media_list %}
 <div class="tweet-media">
   {% for m in media_list %}
-  <a href="{{ link_url }}" target="_blank" rel="noopener noreferrer">
+  <a href="{{ link_url }}" class="media-thumb{% if m.type != 'photo' %} media-thumb-video{% endif %}" target="_blank" rel="noopener noreferrer">
     <img src="{{ m.url }}" alt="{{ m.alt }}" loading="lazy">
+    {% if m.type != "photo" %}<span class="media-play" aria-hidden="true"></span>{% endif %}
   </a>
-  {% if m.type != "photo" %}<span class="media-kind">{{ m.type }} · view on X</span>{% endif %}
   {% endfor %}
 </div>
 {% endif %}
@@ -14,7 +14,9 @@
 {% macro quoted_block(quoted) %}
 {% if quoted %}
 <div class="quoted-tweet">
-  <div class="quoted-label muted">quoted</div>
+  <div class="quoted-label muted">
+    quoted{% if quoted.handle %} · <a href="{{ quoted.url }}">@{{ quoted.handle }}</a>{% endif %}
+  </div>
   <div class="tweet-text">{{ quoted.text }}</div>
   {{ tweet_media(quoted.media, quoted.url) }}
 </div>

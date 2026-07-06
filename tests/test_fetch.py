@@ -25,9 +25,10 @@ TWEETS = [
   {"id": "2", "text": "a quote", "created_at": "2026-07-01T10:00:00Z",
    "referenced_tweets": [{"type": "quoted", "id": "999"}]}]
 
-QUOTED_INCLUDES = {"tweets": [{"id": "999", "text": "original with pic https://t.co/qpic",
+QUOTED_INCLUDES = {"tweets": [{"id": "999", "author_id": "42", "text": "original with pic https://t.co/qpic",
   "attachments": {"media_keys": ["3_999"]}}],
-  "media": [{"media_key": "3_999", "type": "photo", "url": "https://pbs.twimg.com/media/q.jpg"}]}
+  "media": [{"media_key": "3_999", "type": "photo", "url": "https://pbs.twimg.com/media/q.jpg"}],
+  "users": [{"id": "42", "username": "bob"}]}
 
 def test_classify_tweet():
   assert classify_tweet(TWEETS[0]) == "post"
@@ -47,6 +48,8 @@ def test_settings_gate_api_params():
   assert params["exclude"] == "replies,retweets"
   assert "referenced_tweets.id" in params["expansions"]
   assert "referenced_tweets.id.attachments.media_keys" in params["expansions"]
+  assert "referenced_tweets.id.author_id" in params["expansions"]
+  assert params["user.fields"] == "username"
   assert "attachments" in params["tweet.fields"]
   assert "url" in params["media.fields"]
   client.get_user_tweets("111", "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z",
@@ -64,6 +67,7 @@ def test_attach_quoted_merges_includes():
   tweets = [TWEETS[1].copy()]
   attach_quoted(tweets, QUOTED_INCLUDES)
   assert tweets[0]["quoted_tweet"]["id"] == "999"
+  assert tweets[0]["quoted_tweet"]["author_handle"] == "bob"
   assert tweets[0]["quoted_tweet"]["media_expanded"][0]["url"] == "https://pbs.twimg.com/media/q.jpg"
 
 def test_enrich_tweets_attaches_quote_on_fetch():

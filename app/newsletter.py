@@ -63,11 +63,14 @@ def quoted_for_display(raw):
   """Shape stored quoted_tweet blob for rendering, or None."""
   qt = raw.get("quoted_tweet")
   if not qt: return None
-  return {
-    "tweet_id": qt["id"],
-    "text": clean_tweet_text(qt.get("text") or "", qt),
-    "url": f"https://x.com/i/status/{qt['id']}",
-    "media": media_for_display(qt)}
+  handle = qt.get("author_handle")
+  tid = qt["id"]
+  url = f"https://x.com/{handle}/status/{tid}" if handle else f"https://x.com/i/status/{tid}"
+  out = {
+    "tweet_id": tid, "text": clean_tweet_text(qt.get("text") or "", qt),
+    "url": url, "media": media_for_display(qt)}
+  if handle: out["handle"] = handle
+  return out
 
 def build_newsletter(tweets, account):
   """Filter stored tweets by the account's settings and shape them for rendering.
