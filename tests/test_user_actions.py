@@ -5,7 +5,7 @@ from app import auth, db
 from app.fetch.client import XClient
 from app.user_actions import (
   UserActionsClient, drain_like_queue, enqueue_newsletter_likes, follow_tracked_account,
-  like_delay_seconds, resolve_target_x_user_id, resume_like_drain_if_needed,
+  like_delay_seconds, resolve_target_x_user_id, resume_like_drain_if_needed, retry_pending_follows,
 )
 
 class FakeResponse:
@@ -60,7 +60,14 @@ def test_resolve_target_x_user_id_looks_up_handle(conn):
 def test_follow_tracked_account_skips_without_token(conn):
   aid = db.add_account(conn, "alice"); db.set_account_identity(conn, aid, "111", "Alice")
   http = FakeHttp()
-  follow_tracked_account(conn, UserActionsClient(http=http), None, "99", db.get_account(conn, account_id=aid))
+  assert follow_tracked_account(conn, UserActionsClient(http=http), None, "99", db.get_account(conn, account_id=aid)) is False
+  assert http.posts == []
+
+def test_follow_tracked_account_skips_already_followed(conn):
+  aid = db.add_account(conn, "alice"); db.set_account_identity(conn, aid, "111", "Alice")
+  db.mark_account_followed(conn, aid)
+  http = FakeHttp()
+  assert follow_tracked_account(conn, UserActionsClient(http=http), "tok", "99", db.get_account(conn, account_id=aid)) is True
   assert http.posts == []
 
 def test_follow_tracked_account_posts_follow(conn):
@@ -68,6 +75,24 @@ def test_follow_tracked_account_posts_follow(conn):
   http = FakeHttp(); client = UserActionsClient(http=http)
   follow_tracked_account(conn, client, "tok", "99", db.get_account(conn, account_id=aid))
   assert http.posts[0][0] == "/users/99/following"
+  assert db.get_account(conn, account_id=aid)["followed_at"] is not None
+
+def test_follow_tracked_account_does_not_clear_existing_followed_at(conn):
+  aid = db.add_account(conn, "alice"); db.set_account_identity(conn, aid, "111", "Alice")
+  db.mark_account_followed(conn, aid)
+  first = db.get_account(conn, account_id=aid)["followed_at"]
+  follow_tracked_account(conn, UserActionsClient(http=FakeHttp()), "tok", "99", db.get_account(conn, account_id=aid))
+  assert db.get_account(conn, account_id=aid)["followed_at"] == first
+
+def test_retry_pending_follows_follows_unfollowed_accounts(conn):
+  a1 = db.add_account(conn, "alice"); db.set_account_identity(conn, a1, "111", "Alice")
+  a2 = db.add_account(conn, "bob"); db.set_account_identity(conn, a2, "222", "Bob")
+  db.mark_account_followed(conn, a1)
+  http = FakeHttp(); client = UserActionsClient(http=http)
+  followed = retry_pending_follows(conn, "tok", "99", actions_client=client, read_client=XClient(bearer_token="t", http=http))
+  assert followed == 1
+  assert db.get_account(conn, account_id=a2)["followed_at"] is not None
+  assert len(http.posts) == 1
 
 def test_enqueue_newsletter_likes_skips_liked_and_queued(conn):
   db.mark_tweet_liked(conn, "1"); db.enqueue_like(conn, "2")
@@ -113,6 +138,35 @@ def test_resume_like_drain_if_needed_starts_when_queue_nonempty(tmp_path, monkey
   monkeypatch.setattr("app.user_actions.start_like_drain", lambda p: started.append(p))
   resume_like_drain_if_needed(path)
   assert started == [path]
+
+def test_persist_session_oauth_writes_db(conn):
+  class Req:
+    session = {
+      auth.SESSION_USER_ID: "99", auth.SESSION_ACCESS: "at", auth.SESSION_REFRESH: "rt",
+    }
+  auth.persist_session_oauth(conn, Req())
+  row = db.get_oauth_session(conn)
+  assert row["x_user_id"] == "99"
+  assert row["access_token"] == "at"
+  assert row["refresh_token"] == "rt"
+
+def test_persist_session_oauth_skips_incomplete_session(conn):
+  class Req:
+    session = {auth.SESSION_ACCESS: "at"}
+  auth.persist_session_oauth(conn, Req())
+  assert db.get_oauth_session(conn) is None
+
+def test_owner_access_token_refreshes_from_persisted_session(conn, monkeypatch):
+  class Req:
+    session = {
+      auth.SESSION_USER_ID: "99", auth.SESSION_ACCESS: "old-at", auth.SESSION_REFRESH: "rt",
+    }
+  monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
+    "access_token": "new-at", "refresh_token": "rt", "expires_in": 7200})
+  cfg = auth.AuthConfig.from_env(enabled=True)
+  cfg.client_id = "cid"; cfg.client_secret = "sec"
+  token, uid = auth.owner_access_token(conn, Req(), cfg)
+  assert token == "new-at"; assert uid == "99"
 
 def test_resume_like_drain_if_needed_noop_when_queue_empty(tmp_path, monkeypatch):
   path = str(tmp_path / "empty.db")

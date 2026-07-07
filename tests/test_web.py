@@ -11,11 +11,24 @@ def client(tmp_path):
     c.db_path = str(tmp_path / "test.db")
     yield c
 
+def test_home_builds_newsletter_from_stored_tweets_on_load(client):
+  from app.fetch.runner import week_bounds
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "karpathy")
+  ws, we = week_bounds()
+  tweet_at = ws[:11] + "T12:00:00Z"  # mid-week so repair_missing_editions picks it up
+  db.save_tweets(c, aid, [{"id": "99", "text": "stored tweet", "created_at": tweet_at, "kind": "post"}])
+  r = client.get("/")
+  assert r.status_code == 200
+  assert "stored tweet" in r.text
+  assert db.edition_for_week(c, aid, ws) is not None
+
 def test_home_empty(client):
   r = client.get("/")
   assert r.status_code == 200
   assert "Newsletter Tool" in r.text
   assert "Add account" in r.text
+  assert "Estimate cost" in r.text
   assert "digest" not in r.text.lower()
   assert "tracked account" not in r.text.lower()
 
@@ -103,3 +116,24 @@ def test_account_page_redirects_home(client):
   r = client.get(f"/accounts/{aid}", follow_redirects=False)
   assert r.status_code == 303
   assert r.headers["location"] == "/"
+
+def test_estimate_new_account(client, monkeypatch):
+  monkeypatch.setattr("app.fetch.estimate.estimate_fetch_cost", lambda *a, **k: {
+    "handle": "newvoice", "query": "from:newvoice -is:retweet -is:reply",
+    "weeks": [{"week_start": "a", "week_end": "b", "tweet_count": 12}],
+    "avg_tweets_per_week": 12.0, "estimated_weekly_fetch_usd": 0.07, "estimate_query_cost_usd": 0.03})
+  r = client.post("/accounts/estimate", data={"handle": "@newvoice"})
+  assert r.status_code == 200
+  body = r.json()
+  assert body["handle"] == "newvoice"
+  assert body["estimated_weekly_fetch_usd"] == 0.07
+
+def test_estimate_rejects_existing_account(client):
+  client.post("/accounts", data={"handle": "alice"})
+  r = client.post("/accounts/estimate", data={"handle": "alice"})
+  assert r.status_code == 400
+  assert "already tracked" in r.json()["detail"].lower()
+
+def test_estimate_requires_handle(client):
+  r = client.post("/accounts/estimate", data={"handle": "@"})
+  assert r.status_code == 400

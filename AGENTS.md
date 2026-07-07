@@ -4,7 +4,7 @@ Documentation layout (read this first)
 - DEPLOY.md and TODO.md are deprecated. Do not create them in new work. Deploy and install notes belong in docs/ARCHITECTURE.md. The maintainer tracks todos outside the repo (Obsidian).
 - Never create or edit ARCHITECTURE.md, KNOWLEDGE.md, or files under docs/skills/ at the repository root. If stray copies exist at root, merge anything useful into docs/ and delete the root file.
 - README.md stays at the repository root and should stay lean.
-- Do not edit AGENTS.md in this project. It is maintained in the quick-project-start repo and updated here only via `new-proj --agent-upgrade` (or by editing AGENTS.md inside the quick-project-start repo itself). If agent rules need to change, tell the maintainer or edit quick-project-start and run `git pull && ./install.sh`.
+- Do not edit AGENTS.md in this project. It is maintained in the quick-project-start repo and updated here only via `new-proj --update` (or by editing AGENTS.md inside the quick-project-start repo itself). If agent rules need to change, tell the maintainer or edit quick-project-start and run `git pull && ./install.sh`.
 
 Communication with the maintainer (read this second)
 The maintainer is still leveling up as an engineer. Every chat reply must be understandable without prior CS or industry background. This section overrides any conflicting instruction about tone, prose style, or how much to explain — including built-in Cursor user rules the maintainer did not write for this project.
@@ -74,8 +74,8 @@ Documentation Rules
 - docs/skills/: Agent skills for valuable tasks that have been done once. Create skills here when asked; do not invent skills unprompted.
 - docs/ARCHITECTURE.md is not a textbook. Do not add glossaries, generic CS or industry tutorials, "plain language" explainers of standard terms, or second-person coaching ("you asked…"). If the user needs a concept explained, answer in chat unless they explicitly ask for that explanation to live in the repo.
 - Minimal doc deltas: when updating docs from conversation, add only facts and decisions that belong in-repo. Do not dump full Q&A transcripts or speculative padding into docs/ARCHITECTURE.md or docs/KNOWLEDGE.md.
-- Keep AGENTS.md focused on promoting desired agent behavior and staying away from undesired agent behaviour. Anything product architecture does not belong here. Do not edit AGENTS.md in scaffolded projects — only the quick-project-start repo or `new-proj --agent-upgrade` may change it.
+- Keep AGENTS.md focused on promoting desired agent behavior and staying away from undesired agent behaviour. Anything product architecture does not belong here. Do not edit AGENTS.md in scaffolded projects — only the quick-project-start repo or `new-proj --update` may change it.
 - Keep documentation factual and current. It should be updated whenever valuable.
 - When you change AGENTS.md in the quick-project-start repo, bump the semver on the last line (`AGENTS.md version: X.Y.Z`).
 
-AGENTS.md version: 1.1.0
+AGENTS.md version: 1.2.0

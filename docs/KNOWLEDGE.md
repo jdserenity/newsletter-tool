@@ -3,7 +3,7 @@
 Hard-won lessons and context that should survive across agent sessions.
 
 ## X API pricing (2026-07)
-Pay-per-use is the default for new developers. Legacy Basic/Pro subscriptions are being migrated away. Budget using ~$0.005/post read and ~$0.010/user lookup. X dedupes identical resource reads within 24h (only charged once).
+Pay-per-use is the default for new developers. Legacy Basic/Pro subscriptions are being migrated away. Budget using ~$0.005/post read and ~$0.010/user lookup. X dedupes identical resource reads within 24h (only charged once). The app mirrors that rule when recording costs: tweet reads bill only for tweet IDs not fetched in the last 24h; repeat weekly fetches within 24h add $0 for already-seen posts.
 
 ## Database path
 Accounts, tweets, and API cost rows live in one SQLite file. The path comes from `DATABASE_PATH` in `.env` (loaded on app import). If unset, the default is `~/.local/share/newsletter-tool/newsletter.db` — outside any git checkout so all worktrees see the same data.
@@ -48,3 +48,18 @@ Follow uses a 15-minute window; likes use a 24-hour window. Exceeding either ret
 news-manual-fetch
 ```
 Fetches the last complete week, builds newsletters, then drains the like queue in the foreground (paced). Re-run `./scripts/setup.sh` or `pip install -e .` once after pulling if `news-manual-fetch` is not found.
+
+## Database overview
+```bash
+news-db-status
+```
+Prints DB path, current newsletter week, per-account tweet/edition counts, liked vs stored tweet counts (plus queued likes), follow status, API cost, like-queue size, and OAuth status.
+
+`news-manual-fetch` prints the database path it uses at startup — compare that to the path in `news-db-status` if the web UI and CLI ever look out of sync (e.g. dev server started before `.env` was saved).
+
+## Follow and like need OAuth in the database
+Likes drain in a background thread (or via `news-manual-fetch`) using tokens stored in the `oauth_session` table, not the browser cookie alone. Running `news-manual-fetch` can enqueue likes without OAuth saved — `news-db-status` then shows queued likes with `OAuth no`, and nothing gets liked until you sign in via the web app once (homepage load copies session tokens into the DB and resumes the queue). Follow on add-account uses the same refreshed owner token path.
+
+Unfollowed tracked accounts (`followed_at` null) are retried on homepage load and on app startup when OAuth is in the DB — same idea as resuming a stalled like queue.
+
+`news-db-status` per-account newsletter stats use each account's **latest edition** week (same as the homepage), not only the current fetch-target week shown in the header.

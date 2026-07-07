@@ -25,6 +25,7 @@ dev = ["pytest==8.3.4"]
 [project.scripts]
 news-dev = "app.cli:dev"
 news-manual-fetch = "app.cli:fetch"
+news-db-status = "app.cli:db_status_entry"
 
 [tool.setuptools.packages.find]
 where = ["."]

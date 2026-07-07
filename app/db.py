@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DEFAULT_DB_PATH = Path.home() / ".local" / "share" / "newsletter-tool" / "newsletter.db"
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   include_quotes INTEGER NOT NULL DEFAULT 1,
   include_replies INTEGER NOT NULL DEFAULT 0,
   include_retweets INTEGER NOT NULL DEFAULT 0,
+  followed_at TEXT,
   added_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS tweets (
@@ -80,13 +82,40 @@ def connect(db_path=None):
 
 def _migrate_schema(conn):
   tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-  if "digests" not in tables: return
-  if "editions" not in tables:
-    conn.execute("ALTER TABLE digests RENAME TO editions")
-  else:
-    conn.execute("INSERT OR IGNORE INTO editions SELECT * FROM digests")
-    conn.execute("DROP TABLE digests")
-  conn.commit()
+  if "digests" in tables:
+    if "editions" not in tables:
+      conn.execute("ALTER TABLE digests RENAME TO editions")
+    else:
+      conn.execute("INSERT OR IGNORE INTO editions SELECT * FROM digests")
+      conn.execute("DROP TABLE digests")
+    conn.commit()
+  cols = {r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()}
+  if "followed_at" not in cols:
+    conn.execute("ALTER TABLE accounts ADD COLUMN followed_at TEXT"); conn.commit()
+  _repair_inflated_api_call_costs(conn)
+
+def _utc_cutoff(now, hours=24):
+  return (now - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+
+def _repair_inflated_api_call_costs(conn):
+  """One-time repair: zero api_calls rows X would have deduped within 24h."""
+  if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='api_calls'").fetchone(): return
+  conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY)")
+  if conn.execute("SELECT 1 FROM schema_migrations WHERE name = 'api_cost_dedup'").fetchone(): return
+  rows = conn.execute(
+    "SELECT id, account_id, endpoint, called_at FROM api_calls WHERE cost_usd > 0 ORDER BY called_at, id").fetchall()
+  last_charged = {}; changed = False
+  for r in rows:
+    key = (r["account_id"], r["endpoint"])
+    prev = last_charged.get(key)
+    if prev:
+      prev_at = datetime.strptime(prev, "%Y-%m-%d %H:%M:%S")
+      cur_at = datetime.strptime(r["called_at"], "%Y-%m-%d %H:%M:%S")
+      if cur_at - prev_at < timedelta(hours=24):
+        conn.execute("UPDATE api_calls SET cost_usd = 0, units = 0 WHERE id = ?", (r["id"],)); changed = True
+        continue
+    last_charged[key] = r["called_at"]
+  conn.execute("INSERT INTO schema_migrations (name) VALUES ('api_cost_dedup')"); conn.commit()
 
 # --- accounts ---
 
@@ -117,13 +146,27 @@ def update_settings(conn, account_id, **settings):
 def set_account_identity(conn, account_id, x_user_id, display_name):
   conn.execute("UPDATE accounts SET x_user_id = ?, display_name = ? WHERE id = ?", (x_user_id, display_name, account_id)); conn.commit()
 
+def mark_account_followed(conn, account_id):
+  conn.execute("UPDATE accounts SET followed_at = datetime('now') WHERE id = ? AND followed_at IS NULL", (account_id,)); conn.commit()
+
+def accounts_pending_follow(conn):
+  return [dict(r) for r in conn.execute(
+    "SELECT * FROM accounts WHERE active = 1 AND followed_at IS NULL ORDER BY handle").fetchall()]
+
+def pending_follow_count(conn):
+  return conn.execute(
+    "SELECT COUNT(*) AS c FROM accounts WHERE active = 1 AND followed_at IS NULL").fetchone()["c"]
+
 # --- tweets ---
 
-def save_tweets(conn, account_id, tweets):
+def save_tweets(conn, account_id, tweets, fetched_at=None):
+  if fetched_at is None: ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+  elif hasattr(fetched_at, "strftime"): ts = fetched_at.strftime("%Y-%m-%d %H:%M:%S")
+  else: ts = fetched_at
   for t in tweets:
     conn.execute(
-      "INSERT OR IGNORE INTO tweets (account_id, tweet_id, kind, text, created_at, raw_json) VALUES (?, ?, ?, ?, ?, ?)",
-      (account_id, t["id"], t.get("kind", "post"), t["text"], t["created_at"], json.dumps(t)))
+      "INSERT OR IGNORE INTO tweets (account_id, tweet_id, kind, text, created_at, raw_json, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      (account_id, t["id"], t.get("kind", "post"), t["text"], t["created_at"], json.dumps(t), ts))
   conn.commit()
 
 def tweets_for_week(conn, account_id, week_start, week_end):
@@ -133,6 +176,31 @@ def tweets_for_week(conn, account_id, week_start, week_end):
   return [dict(r) for r in rows]
 
 # --- api calls / cost ---
+
+def billable_post_count(conn, tweet_ids, now=None):
+  """Post reads X bills once per tweet within 24h; skip tweet IDs we already fetched recently."""
+  if not tweet_ids: return 0
+  now = now or datetime.now(timezone.utc)
+  cutoff = _utc_cutoff(now)
+  placeholders = ",".join("?" * len(tweet_ids))
+  rows = conn.execute(
+    f"SELECT tweet_id FROM tweets WHERE tweet_id IN ({placeholders}) AND fetched_at >= ?",
+    (*tweet_ids, cutoff)).fetchall()
+  recent = {r["tweet_id"] for r in rows}
+  return len(tweet_ids) - len(recent)
+
+def post_read_cost(conn, tweet_ids, now=None):
+  from app.fetch.client import COST_PER_POST_READ
+  return billable_post_count(conn, tweet_ids, now=now) * COST_PER_POST_READ
+
+def billable_user_lookup(conn, account_id, now=None):
+  """User lookup is billed once per account within 24h."""
+  now = now or datetime.now(timezone.utc)
+  cutoff = _utc_cutoff(now)
+  row = conn.execute(
+    "SELECT 1 FROM api_calls WHERE account_id = ? AND endpoint = 'users/by/username' AND cost_usd > 0 AND called_at >= ?",
+    (account_id, cutoff)).fetchone()
+  return row is None
 
 def record_api_call(conn, account_id, endpoint, units, cost_usd):
   conn.execute("INSERT INTO api_calls (account_id, endpoint, units, cost_usd) VALUES (?, ?, ?, ?)",
@@ -214,3 +282,70 @@ def dequeue_like(conn, tweet_id):
 
 def like_queue_size(conn):
   return conn.execute("SELECT COUNT(*) AS c FROM like_queue").fetchone()["c"]
+
+def liked_tweet_count(conn, account_id):
+  return conn.execute(
+    """SELECT COUNT(*) AS c FROM tweets t
+       INNER JOIN liked_tweets l ON l.tweet_id = t.tweet_id
+       WHERE t.account_id = ?""", (account_id,)).fetchone()["c"]
+
+def queued_like_count(conn, account_id):
+  return conn.execute(
+    """SELECT COUNT(*) AS c FROM tweets t
+       INNER JOIN like_queue q ON q.tweet_id = t.tweet_id
+       WHERE t.account_id = ?""", (account_id,)).fetchone()["c"]
+
+# --- overview (CLI status) ---
+
+def edition_for_week(conn, account_id, week_start):
+  row = conn.execute(
+    "SELECT * FROM editions WHERE account_id = ? AND week_start = ?", (account_id, week_start)).fetchone()
+  return dict(row) if row else None
+
+def database_overview(conn, week_start=None, week_end=None):
+  """Summary stats for CLI status. Per-account newsletter stats use the latest edition."""
+  if week_start is None or week_end is None:
+    from app.fetch.runner import week_bounds
+    week_start, week_end = week_bounds()
+  accounts = []
+  for a in list_accounts(conn, active_only=False):
+    tweet_count = conn.execute("SELECT COUNT(*) AS c FROM tweets WHERE account_id = ?", (a["id"],)).fetchone()["c"]
+    edition = latest_edition(conn, a["id"])
+    if edition:
+      ed_ws, ed_we = edition["week_start"], edition["week_end"]
+      tweets_in_week = len(tweets_for_week(conn, a["id"], ed_ws, ed_we))
+      edition_items = edition["item_count"]
+    else:
+      ed_ws = ed_we = None
+      tweets_in_week = len(tweets_for_week(conn, a["id"], week_start, week_end))
+      edition_items = None
+    accounts.append({
+      "id": a["id"], "handle": a["handle"], "display_name": a["display_name"], "active": bool(a["active"]),
+      "tweet_count": tweet_count, "tweets_in_week": tweets_in_week,
+      "edition_week_start": ed_ws, "edition_week_end": ed_we,
+      "liked_count": liked_tweet_count(conn, a["id"]),
+      "queued_like_count": queued_like_count(conn, a["id"]),
+      "followed": bool(a.get("followed_at")),
+      "edition_items": edition_items,
+      "edition_cost_usd": edition["cost_usd"] if edition else None,
+      "total_cost_usd": cost_for_account(conn, a["id"]),
+    })
+  totals = conn.execute(
+    """SELECT
+         (SELECT COUNT(*) FROM accounts WHERE active = 1) AS active_accounts,
+         (SELECT COUNT(*) FROM accounts WHERE active = 0) AS inactive_accounts,
+         (SELECT COUNT(*) FROM tweets) AS tweets,
+         (SELECT COUNT(*) FROM editions) AS editions,
+         (SELECT COALESCE(SUM(cost_usd), 0) FROM api_calls) AS api_cost_usd""").fetchone()
+  return {
+    "week_start": week_start, "week_end": week_end,
+    "accounts": accounts,
+    "active_accounts": totals["active_accounts"],
+    "inactive_accounts": totals["inactive_accounts"],
+    "tweet_count": totals["tweets"],
+    "edition_count": totals["editions"],
+    "api_cost_usd": totals["api_cost_usd"],
+    "like_queue_size": like_queue_size(conn),
+    "pending_follow_count": pending_follow_count(conn),
+    "oauth_signed_in": get_oauth_session(conn) is not None,
+  }
