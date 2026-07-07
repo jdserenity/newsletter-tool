@@ -17,6 +17,12 @@ Manual weekly fetch (build newsletters + paced likes):
 news-manual-fetch
 ```
 
+Database overview (counts, editions, API cost):
+
+```bash
+news-db-status
+```
+
 ## Test
 
 ```bash

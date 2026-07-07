@@ -7,14 +7,15 @@ from app.env import load_env
 load_env()
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import auth, db
+from app.fetch.runner import repair_missing_editions
 from app.scheduler import start_scheduler
-from app.user_actions import UserActionsClient, follow_tracked_account
+from app.user_actions import UserActionsClient, follow_tracked_account, resume_like_drain_if_needed, retry_pending_follows, retry_pending_follows_on_startup
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -28,9 +29,9 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
 
   @asynccontextmanager
   async def lifespan(app):
-    from app.user_actions import resume_like_drain_if_needed
     scheduler = start_scheduler(path) if with_scheduler else None
     resume_like_drain_if_needed(path)
+    retry_pending_follows_on_startup(path)
     yield
     if scheduler: scheduler.shutdown(wait=False)
 
@@ -49,6 +50,14 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     ctx = dict(ctx)
     if auth_config.enabled: ctx["user"] = auth.session_user(request)
     return templates.TemplateResponse(request, name, ctx)
+
+  def after_authenticated_request(c, request: Request):
+    """Persist OAuth, retry pending follows, and resume a stalled like queue."""
+    if not auth_config.enabled: return
+    auth.persist_session_oauth(c, request)
+    token, owner_id = auth.owner_access_token(c, request, auth_config)
+    if token and owner_id: retry_pending_follows(c, token, owner_id)
+    resume_like_drain_if_needed(path)
 
   if auth_config.enabled:
     @app.get("/auth/login", response_class=HTMLResponse)
@@ -101,7 +110,10 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
 
   @app.get("/", response_class=HTMLResponse)
   def home(request: Request):
-    return render(request, "home.html", {"cards": newsletter_cards(conn())})
+    c = conn()
+    repair_missing_editions(c)
+    after_authenticated_request(c, request)
+    return render(request, "home.html", {"cards": newsletter_cards(c)})
 
   @app.get("/settings", response_class=HTMLResponse)
   def settings_page(request: Request):
@@ -114,12 +126,26 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     try: account_id = db.add_account(c, handle)
     except Exception: pass  # duplicate handle: just return to the list
     if account_id and auth_config.enabled:
-      user = auth.session_user(request)
-      token = request.session.get(auth.SESSION_ACCESS)
-      if user and token:
+      token, owner_id = auth.owner_access_token(c, request, auth_config)
+      if token and owner_id:
         account = db.get_account(c, account_id=account_id)
-        follow_tracked_account(c, UserActionsClient(), token, user["x_user_id"], account)
+        follow_tracked_account(c, UserActionsClient(), token, owner_id, account)
+      after_authenticated_request(c, request)
     return RedirectResponse("/", status_code=303)
+
+  @app.post("/accounts/estimate")
+  def estimate_account(handle: str = Form(...), include_replies: bool = Form(False),
+                       include_retweets: bool = Form(False)):
+    from app.fetch.client import XClient
+    from app.fetch.estimate import estimate_fetch_cost
+    h = handle.lstrip("@").strip()
+    if not h: raise HTTPException(400, "Handle required")
+    if db.get_account(conn(), handle=h): raise HTTPException(400, "Account already tracked")
+    try:
+      result = estimate_fetch_cost(XClient(), h, include_replies=include_replies, include_retweets=include_retweets)
+    except Exception as e:
+      raise HTTPException(502, f"X API estimate failed: {e}") from e
+    return JSONResponse(result)
 
   @app.post("/accounts/{account_id}/remove")
   def remove_account(account_id: int):

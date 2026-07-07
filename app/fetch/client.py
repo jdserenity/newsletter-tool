@@ -6,6 +6,7 @@ import httpx
 BASE_URL = "https://api.x.com/2"
 COST_PER_POST_READ = 0.005
 COST_PER_USER_READ = 0.010
+COST_PER_COUNTS_ALL = 0.010
 
 TWEET_FIELDS = "created_at,referenced_tweets,entities,public_metrics,attachments,author_id"
 MEDIA_FIELDS = "url,preview_image_url,type,alt_text,width,height"
@@ -86,6 +87,21 @@ class XClient:
       tweets.extend(page); token = body.get("meta", {}).get("next_token")
       if not token: break
     return tweets, cost, units
+
+  def count_tweets_all(self, query, start_time, end_time, granularity="day"):
+    """Returns (tweet_count, cost_usd) for a query in a time window. One charge per request page."""
+    params = {"query": query, "start_time": start_time, "end_time": end_time, "granularity": granularity}
+    total = 0; cost = 0.0; token = None
+    while True:
+      p = dict(params)
+      if token: p["pagination_token"] = token
+      r = self.http.get("/tweets/counts/all", params=p); r.raise_for_status()
+      body = r.json()
+      total += sum(b.get("tweet_count", 0) for b in body.get("data", []))
+      cost += COST_PER_COUNTS_ALL
+      token = body.get("meta", {}).get("next_token")
+      if not token: break
+    return total, cost
 
 def classify_tweet(raw):
   """post | quote | reply | retweet, based on referenced_tweets."""

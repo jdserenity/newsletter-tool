@@ -65,8 +65,12 @@
       <div class="add-label">Add account</div>
       <div class="add-row">
         <input type="text" id="handle-input" name="handle" placeholder="@handle" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="add-actions">
+        <button type="button" class="ghost" id="estimate-btn">Estimate cost</button>
         <button type="submit">Add</button>
       </div>
+      <div id="estimate-result" class="estimate-result" hidden></div>
     </form>
   </article>
 </div>
@@ -75,7 +79,57 @@
 (function() {
   var input = document.getElementById('handle-input');
   var form = document.getElementById('add-account-form');
+  var estimateBtn = document.getElementById('estimate-btn');
+  var estimateResult = document.getElementById('estimate-result');
   if (!input || !form) return;
+
+  function handleValue() {
+    var h = input.value.trim().replace(/^@+/, '');
+    return h || '';
+  }
+
+  function showEstimate(html, isError) {
+    if (!estimateResult) return;
+    estimateResult.hidden = false;
+    estimateResult.classList.toggle('error', !!isError);
+    estimateResult.innerHTML = html;
+  }
+
+  if (estimateBtn) {
+    estimateBtn.addEventListener('click', function() {
+      var h = handleValue();
+      if (!h) { input.focus(); return; }
+      estimateBtn.disabled = true;
+      estimateBtn.textContent = 'Checking…';
+      showEstimate('Querying the last 3 weeks on X…', false);
+      var body = new URLSearchParams();
+      body.set('handle', h);
+      fetch('/accounts/estimate', { method: 'POST', body: body, headers: { 'Accept': 'application/json' } })
+        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+        .then(function(res) {
+          if (!res.ok) {
+            showEstimate(res.data.detail || 'Estimate failed.', true);
+            return;
+          }
+          var d = res.data;
+          var weeks = (d.weeks || []).map(function(w) {
+            return w.week_start.slice(0, 10) + ': ' + w.tweet_count;
+          }).join(' · ');
+          showEstimate(
+            '<strong>@' + d.handle + '</strong><br>' +
+            'Avg <strong>' + d.avg_tweets_per_week + '</strong> tweets/week (last 3 weeks: ' + weeks + ')<br>' +
+            'Projected weekly fetch: <strong>~$' + d.estimated_weekly_fetch_usd.toFixed(2) + '</strong> ' +
+            '(default settings; quotes always fetched)<br>' +
+            '<span class="muted">This check cost $' + d.estimate_query_cost_usd.toFixed(2) + ' on X.</span>',
+            false);
+        })
+        .catch(function() { showEstimate('Estimate failed — check your connection or X API token.', true); })
+        .finally(function() {
+          estimateBtn.disabled = false;
+          estimateBtn.textContent = 'Estimate cost';
+        });
+    });
+  }
 
   function cursorAfterAt() {
     if (input.value.startsWith('@')) input.setSelectionRange(input.value.length, input.value.length);
