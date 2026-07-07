@@ -103,8 +103,16 @@
   .add-card { justify-content: center; align-items: center; padding: 2rem 1.25rem; flex-shrink: 0; }
   .add-form { width: 100%; }
   .add-label { font-size: 0.9rem; color: var(--muted); margin-bottom: 0.75rem; text-align: center; }
-  .add-row { display: flex; gap: 0.5rem; }
-  .add-row input { flex: 1; cursor: text; }
+  .add-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .add-row input { flex: 1; min-width: 8rem; cursor: text; }
+  .add-actions { display: flex; gap: 0.5rem; width: 100%; }
+  .add-actions button { flex: 1; }
+  .estimate-result {
+    margin-top: 0.85rem; padding: 0.75rem 0.85rem; border-radius: 8px;
+    background: var(--accent-soft); font-size: 0.85rem; line-height: 1.45;
+  }
+  .estimate-result.error { background: #fde8e8; color: #8b1e1e; }
+  .estimate-result strong { color: var(--ink); }
 </style>
 </head>
 <body>
