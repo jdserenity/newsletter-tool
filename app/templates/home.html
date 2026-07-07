@@ -70,33 +70,9 @@
     </form>
   </article>
 </div>
+<script src="/static/carousel.js"></script>
 <script>
 (function() {
-  var carousel = document.getElementById('newsletter-carousel');
-  if (carousel) {
-    var down = false, startX = 0, scrollLeft = 0;
-    carousel.addEventListener('mousedown', function(e) {
-      if (e.target.closest('a, button, input, label, select, textarea')) return;
-      down = true; startX = e.clientX; scrollLeft = carousel.scrollLeft;
-      carousel.classList.add('dragging');
-    });
-    document.addEventListener('mouseup', function() {
-      if (!down) return;
-      down = false; carousel.classList.remove('dragging');
-    });
-    document.addEventListener('mousemove', function(e) {
-      if (!down) return;
-      e.preventDefault();
-      carousel.scrollLeft = scrollLeft - (e.clientX - startX);
-    });
-    carousel.addEventListener('wheel', function(e) {
-      if (e.deltaX !== 0) return;
-      if (e.deltaY === 0) return;
-      e.preventDefault();
-      carousel.scrollLeft += e.deltaY;
-    }, { passive: false });
-  }
-
   var input = document.getElementById('handle-input');
   var form = document.getElementById('add-account-form');
   if (!input || !form) return;

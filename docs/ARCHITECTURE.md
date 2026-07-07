@@ -13,12 +13,13 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Per-account granular settings (e.g. include/exclude quote tweets). Settings affect which API calls are made (fetch layer), not just newsletter rendering.
 - Per-account visibility into X API cost incurred by that account, computed from rows in the `api_calls` table (no log files).
 - Homepage: horizontally scrollable carousel of newsletter cards (one per account). Each card shows settings toggles, API cost, and the latest newsletter inline — no separate account list or detail page.
+- Carousel navigation: mouse wheel over card chrome or gaps scrolls horizontally between cards; wheel over the newsletter body scrolls vertically inside that card. Left/right arrow keys move between cards; up/down arrow keys scroll inside the centered card. Card bodies and the carousel hide scrollbars.
 - RSS feed structure is not finalized (per-account vs consolidated recap). v1 ships per-account feeds at `/feeds/{id}.xml` as the baseline.
 
 ## Tech stack
 - Backend: Python + FastAPI — one app serves web pages, RSS, and the weekly fetch.
 - Database: SQLite (single file). Path from `DATABASE_PATH` in `.env` (or the process environment on the VPS). Default: `~/.local/share/newsletter-tool/newsletter.db` — outside the repo so git worktrees share one database. Raw API responses cached in the DB so newsletters can be rebuilt without refetching.
-- Frontend: server-rendered Jinja2 templates; small inline JS for carousel drag-scroll. No JS framework, no build step.
+- Frontend: server-rendered Jinja2 templates; `app/static/carousel.js` for carousel drag-scroll, spatial wheel zones, and arrow-key navigation. No JS framework, no build step.
 - Scheduling: APScheduler inside the app (weekly fetch, Monday 06:00 UTC). Can be reduced to cron later.
 - Hosting: owner's VPS.
 
