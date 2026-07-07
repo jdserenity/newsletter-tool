@@ -7,7 +7,7 @@ from app.env import load_env
 load_env()
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -125,6 +125,20 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
         follow_tracked_account(c, UserActionsClient(), token, owner_id, account)
       after_authenticated_request(c, request)
     return RedirectResponse("/", status_code=303)
+
+  @app.post("/accounts/estimate")
+  def estimate_account(handle: str = Form(...), include_replies: bool = Form(False),
+                       include_retweets: bool = Form(False)):
+    from app.fetch.client import XClient
+    from app.fetch.estimate import estimate_fetch_cost
+    h = handle.lstrip("@").strip()
+    if not h: raise HTTPException(400, "Handle required")
+    if db.get_account(conn(), handle=h): raise HTTPException(400, "Account already tracked")
+    try:
+      result = estimate_fetch_cost(XClient(), h, include_replies=include_replies, include_retweets=include_retweets)
+    except Exception as e:
+      raise HTTPException(502, f"X API estimate failed: {e}") from e
+    return JSONResponse(result)
 
   @app.post("/accounts/{account_id}/remove")
   def remove_account(account_id: int):

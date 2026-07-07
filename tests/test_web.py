@@ -28,6 +28,7 @@ def test_home_empty(client):
   assert r.status_code == 200
   assert "Newsletter Tool" in r.text
   assert "Add account" in r.text
+  assert "Estimate cost" in r.text
   assert "digest" not in r.text.lower()
   assert "tracked account" not in r.text.lower()
 
@@ -115,3 +116,24 @@ def test_account_page_redirects_home(client):
   r = client.get(f"/accounts/{aid}", follow_redirects=False)
   assert r.status_code == 303
   assert r.headers["location"] == "/"
+
+def test_estimate_new_account(client, monkeypatch):
+  monkeypatch.setattr("app.fetch.estimate.estimate_fetch_cost", lambda *a, **k: {
+    "handle": "newvoice", "query": "from:newvoice -is:retweet -is:reply",
+    "weeks": [{"week_start": "a", "week_end": "b", "tweet_count": 12}],
+    "avg_tweets_per_week": 12.0, "estimated_weekly_fetch_usd": 0.07, "estimate_query_cost_usd": 0.03})
+  r = client.post("/accounts/estimate", data={"handle": "@newvoice"})
+  assert r.status_code == 200
+  body = r.json()
+  assert body["handle"] == "newvoice"
+  assert body["estimated_weekly_fetch_usd"] == 0.07
+
+def test_estimate_rejects_existing_account(client):
+  client.post("/accounts", data={"handle": "alice"})
+  r = client.post("/accounts/estimate", data={"handle": "alice"})
+  assert r.status_code == 400
+  assert "already tracked" in r.json()["detail"].lower()
+
+def test_estimate_requires_handle(client):
+  r = client.post("/accounts/estimate", data={"handle": "@"})
+  assert r.status_code == 400
