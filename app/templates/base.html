@@ -11,6 +11,7 @@
     --card-width: 600px;
   }
   * { box-sizing: border-box; }
+  html, body { overflow: hidden; height: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
     font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; line-height: 1.55;
@@ -34,7 +35,7 @@
     padding: 1rem 1.25rem; margin-bottom: 0.75rem;
   }
   a { color: var(--accent); }
-  .tweet-text, .week-label { cursor: text; }
+  .tweet-text, .week-label { cursor: auto; }
   .muted { color: var(--muted); font-size: 0.85rem; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
   form.inline { display: inline; }

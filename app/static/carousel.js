@@ -5,15 +5,15 @@
   var down = false, startX = 0, scrollLeft = 0, activeBody = null;
   var CARD_SCROLL_STEP = 80;
 
-  function isNewsletterBody(el) { return el && el.closest && el.closest('.newsletter-body'); }
+  function isSelectableText(el) { return el && el.closest && el.closest('.tweet-text, .week-label'); }
   function isFormField(el) { return el && el.closest && el.closest('input, textarea, select, [contenteditable]'); }
+  function isNewsletterBody(el) { return el && el.closest && el.closest('.newsletter-body'); }
 
-  function newsletterCards() {
-    return Array.prototype.slice.call(carousel.querySelectorAll('.newsletter-card:not(.add-card)'));
+  function allCards() {
+    return Array.prototype.slice.call(carousel.querySelectorAll('.newsletter-card'));
   }
-
-  function newsletterBodies() {
-    return Array.prototype.slice.call(carousel.querySelectorAll('.newsletter-card:not(.add-card) .newsletter-body'));
+  function contentCards() {
+    return Array.prototype.slice.call(carousel.querySelectorAll('.newsletter-card:not(.add-card)'));
   }
 
   function centeredCardIndex(cards) {
@@ -28,24 +28,21 @@
 
   function activeNewsletterBody() {
     if (activeBody && carousel.contains(activeBody)) return activeBody;
-    var cards = newsletterCards();
+    var cards = contentCards();
     if (!cards.length) return null;
     return cards[centeredCardIndex(cards)].querySelector('.newsletter-body');
   }
 
   function setActiveBody(body) { if (body) activeBody = body; }
 
-  function scrollCarouselBy(deltaY) {
-    carousel.scrollLeft += deltaY;
-  }
-
   function scrollToCard(offset) {
-    var cards = newsletterCards();
+    var cards = allCards();
     if (!cards.length) return;
     var idx = centeredCardIndex(cards) + offset;
     if (idx < 0 || idx >= cards.length) return;
     cards[idx].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    setActiveBody(cards[idx].querySelector('.newsletter-body'));
+    var body = cards[idx].querySelector('.newsletter-body');
+    if (body) setActiveBody(body);
   }
 
   function scrollActiveBodyBy(delta) {
@@ -56,7 +53,7 @@
 
   carousel.addEventListener('mousedown', function(e) {
     if (e.target.closest('a, button, input, label, select, textarea')) return;
-    if (isNewsletterBody(e.target)) return;
+    if (isSelectableText(e.target)) return;
     down = true; startX = e.clientX; scrollLeft = carousel.scrollLeft;
     carousel.classList.add('dragging');
   });
@@ -70,12 +67,12 @@
     carousel.scrollLeft = scrollLeft - (e.clientX - startX);
   });
 
-  carousel.addEventListener('wheel', function(e) {
+  document.addEventListener('wheel', function(e) {
     if (e.deltaX !== 0) return;
     if (e.deltaY === 0) return;
     if (isNewsletterBody(e.target)) return;
     e.preventDefault();
-    scrollCarouselBy(e.deltaY);
+    carousel.scrollLeft += e.deltaY;
   }, { passive: false });
 
   carousel.addEventListener('click', function(e) {
