@@ -103,6 +103,10 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   def home(request: Request):
     return render(request, "home.html", {"cards": newsletter_cards(conn())})
 
+  @app.get("/settings", response_class=HTMLResponse)
+  def settings_page(request: Request):
+    return render(request, "settings.html", {"accounts": db.list_accounts(conn())})
+
   @app.post("/accounts")
   def add_account(request: Request, handle: str = Form(...)):
     c = conn()
@@ -120,7 +124,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   @app.post("/accounts/{account_id}/remove")
   def remove_account(account_id: int):
     db.remove_account(conn(), account_id)
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/settings", status_code=303)
 
   @app.get("/accounts/{account_id}")
   def account_page(account_id: int):

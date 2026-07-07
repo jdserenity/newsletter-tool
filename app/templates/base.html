@@ -29,6 +29,14 @@
     display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem;
     flex-shrink: 0; text-align: right;
   }
+  .site-actions { display: flex; align-items: center; gap: 0.5rem; }
+  a.ghost {
+    display: inline-block; padding: 0.5rem 0.9rem; border-radius: 8px; cursor: pointer;
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    font-size: 0.9rem; text-decoration: none;
+  }
+  body.page-settings { overflow: auto; height: auto; min-height: 100%; }
+  .settings-panel { padding: 0 1.25rem; max-width: 42rem; }
   h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 2rem 0 0.75rem; }
   .card {
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -148,7 +156,7 @@
   .add-row input { flex: 1; cursor: text; }
 </style>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 <div class="wrap">
   <header class="site">
     <div class="site-brand">
@@ -158,7 +166,10 @@
     {% if user %}
     <div class="site-user">
       <span class="muted">Signed in as <strong>@{{ user.username }}</strong></span>
-      <form class="inline" method="post" action="/auth/logout"><button class="ghost" type="submit">Sign out</button></form>
+      <div class="site-actions">
+        <a class="ghost" href="/settings">Settings</a>
+        <form class="inline" method="post" action="/auth/logout"><button class="ghost" type="submit">Sign out</button></form>
+      </div>
     </div>
     {% endif %}
   </header>

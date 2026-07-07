@@ -37,6 +37,27 @@ def test_remove_account_via_api(client):
   aid = db.get_account(c, handle="alice")["id"]
   r = client.post(f"/accounts/{aid}/remove", follow_redirects=True)
   assert "@alice" not in r.text
+  assert "/settings" in str(r.request.url)
+
+def test_settings_page_lists_accounts_and_remove(client):
+  client.post("/accounts", data={"handle": "@alice"})
+  client.post("/accounts", data={"handle": "bob"})
+  r = client.get("/settings")
+  assert r.status_code == 200
+  assert "Settings" in r.text
+  assert "@alice" in r.text
+  assert "@bob" in r.text
+  assert r.text.count("/remove") == 2
+  c = db.connect(client.db_path)
+  aid = db.get_account(c, handle="alice")["id"]
+  r = client.post(f"/accounts/{aid}/remove", follow_redirects=True)
+  assert "@alice" not in r.text
+  assert "@bob" in r.text
+
+def test_settings_page_empty(client):
+  r = client.get("/settings")
+  assert r.status_code == 200
+  assert "No tracked accounts yet" in r.text
 
 def test_home_multiple_accounts_shows_carousel_and_add_card(client):
   client.post("/accounts", data={"handle": "alice"})
