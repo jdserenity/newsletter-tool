@@ -2,12 +2,16 @@
   var carousel = document.getElementById('newsletter-carousel');
   if (!carousel) return;
 
-  var down = false, startX = 0, scrollLeft = 0, activeBody = null;
   var CARD_SCROLL_STEP = 80;
+  var DRAG_THRESHOLD = 5;
 
-  function isSelectableText(el) { return el && el.closest && el.closest('.tweet-text, .week-label'); }
+  // drag state
+  var down = false, startX = 0, startY = 0, scrollLeft = 0, startScrollTop = 0;
+  var dragMode = null; // 'horizontal' | 'vertical' | null (undecided)
+  var dragBody = null; // .newsletter-body el when dragMode may go vertical
+
   function isFormField(el) { return el && el.closest && el.closest('input, textarea, select, [contenteditable]'); }
-  function isNewsletterBody(el) { return el && el.closest && el.closest('.newsletter-body'); }
+  function isNewsletterBody(el) { return el && el.closest ? el.closest('.newsletter-body') : null; }
 
   function allCards() {
     return Array.prototype.slice.call(carousel.querySelectorAll('.newsletter-card'));
@@ -26,13 +30,13 @@
     return idx;
   }
 
+  var activeBody = null;
   function activeNewsletterBody() {
     if (activeBody && carousel.contains(activeBody)) return activeBody;
     var cards = contentCards();
     if (!cards.length) return null;
     return cards[centeredCardIndex(cards)].querySelector('.newsletter-body');
   }
-
   function setActiveBody(body) { if (body) activeBody = body; }
 
   function scrollToCard(offset) {
@@ -51,26 +55,54 @@
     body.scrollTop += delta;
   }
 
+  // Returns true if body can absorb this wheel delta (has more content to scroll toward)
+  function bodyCanScroll(body, deltaY) {
+    if (!body) return false;
+    if (deltaY < 0 && body.scrollTop > 0) return true;
+    if (deltaY > 0 && body.scrollTop < body.scrollHeight - body.clientHeight - 1) return true;
+    return false;
+  }
+
   carousel.addEventListener('mousedown', function(e) {
     if (e.target.closest('a, button, input, label, select, textarea')) return;
-    if (isSelectableText(e.target)) return;
-    down = true; startX = e.clientX; scrollLeft = carousel.scrollLeft;
+    down = true;
+    startX = e.clientX; startY = e.clientY;
+    scrollLeft = carousel.scrollLeft;
+    dragMode = null;
+    dragBody = isNewsletterBody(e.target);
+    startScrollTop = dragBody ? dragBody.scrollTop : 0;
+    if (activeBody) setActiveBody(dragBody || activeBody);
     carousel.classList.add('dragging');
   });
+
   document.addEventListener('mouseup', function() {
     if (!down) return;
-    down = false; carousel.classList.remove('dragging');
+    down = false; dragMode = null; dragBody = null;
+    carousel.classList.remove('dragging');
   });
+
   document.addEventListener('mousemove', function(e) {
     if (!down) return;
+    var dx = e.clientX - startX, dy = e.clientY - startY;
+
+    if (!dragMode) {
+      if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+      dragMode = (dragBody && Math.abs(dy) > Math.abs(dx)) ? 'vertical' : 'horizontal';
+    }
+
     e.preventDefault();
-    carousel.scrollLeft = scrollLeft - (e.clientX - startX);
+    if (dragMode === 'vertical' && dragBody) {
+      dragBody.scrollTop = startScrollTop - dy;
+    } else {
+      carousel.scrollLeft = scrollLeft - dx;
+    }
   });
 
   document.addEventListener('wheel', function(e) {
     if (e.deltaX !== 0) return;
     if (e.deltaY === 0) return;
-    if (isNewsletterBody(e.target)) return;
+    var body = e.target.closest ? e.target.closest('.newsletter-body') : null;
+    if (bodyCanScroll(body, e.deltaY)) return;
     e.preventDefault();
     carousel.scrollLeft += e.deltaY;
   }, { passive: false });
