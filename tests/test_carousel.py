@@ -20,11 +20,15 @@ def test_carousel_js_wheel_on_document():
   src = CAROUSEL_JS.read_text()
   assert "document.addEventListener('wheel'" in src
 
-def test_carousel_js_wheel_uses_can_scroll_check():
+def test_carousel_js_wheel_never_chains_at_scroll_edges():
   src = CAROUSEL_JS.read_text()
-  # wheel lets newsletter-body handle scroll only when it can actually scroll
-  assert "bodyCanScroll" in src
-  assert "if (bodyCanScroll(body, e.deltaY)) return;" in src
+  # once a body has any overflow, wheel always scrolls it (even at top/bottom) —
+  # no edge-triggered handoff into the horizontal carousel
+  assert "bodyHasOverflow" in src
+  assert "if (bodyHasOverflow(body)) return;" in src
+  # must not key the decision off scrollTop/direction anymore (old edge-chaining logic)
+  assert "body.scrollTop > 0" not in src
+  assert "body.scrollTop < body.scrollHeight" not in src
 
 def test_carousel_js_direction_aware_drag():
   src = CAROUSEL_JS.read_text()
@@ -34,13 +38,18 @@ def test_carousel_js_direction_aware_drag():
   assert "dragBody.scrollTop = startScrollTop - dy" in src
   assert "carousel.scrollLeft = scrollLeft - dx" in src
 
-def test_carousel_js_drag_allowed_from_newsletter_body():
+def test_carousel_js_drag_allowed_from_newsletter_body_but_not_text():
   src = CAROUSEL_JS.read_text()
-  # isNewsletterBody is used to detect body for direction, not to bail early
   mousedown_block = src.split("mousedown")[1].split("});")[0]
-  assert "isSelectableText" not in mousedown_block
-  # there must be no early return that blocks drag inside newsletter-body
+  # dragging must bail only on actual text content, not the whole newsletter-body zone
+  assert "isSelectableText(e.target)" in mousedown_block
   assert "if (isNewsletterBody(e.target)) return;" not in src
+
+def test_carousel_js_selectable_text_targets_text_content_span():
+  src = CAROUSEL_JS.read_text()
+  # narrow selector — only the inline text span, not the whole tweet-text block —
+  # so the surrounding empty space in that block still starts a drag
+  assert "isSelectableText(el) { return el && el.closest && el.closest('.text-content'); }" in src
 
 def test_carousel_js_arrow_keys():
   src = CAROUSEL_JS.read_text()
@@ -81,9 +90,41 @@ def test_newsletter_body_hides_scrollbar(client):
   assert ".newsletter-body::-webkit-scrollbar { display: none; }" in r.text
   assert "scrollbar-width: none" in r.text
 
-def test_tweet_text_has_no_explicit_cursor(client):
+def test_tweet_text_block_has_no_explicit_cursor(client):
   r = client.get("/")
+  # the block-level wrapper (.tweet-text/.week-label) must not set cursor itself —
+  # that's what made the text cursor appear over empty space far from the text
   assert ".tweet-text, .week-label { cursor:" not in r.text
+
+def test_text_content_span_has_text_cursor(client):
+  r = client.get("/")
+  assert ".text-content { cursor: text; }" in r.text
+
+def test_tweet_text_wraps_content_in_text_content_span(client):
+  from app import db
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [{"tweet_id": "1", "kind": "post", "text": "hello world", "created_at": "2026-06-30T10:00:00Z",
+            "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0}]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.0)
+  r = client.get("/")
+  assert '<div class="tweet-text"><span class="text-content">hello world</span></div>' in r.text
+
+def test_images_are_not_natively_draggable(client):
+  from app import db
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [{"tweet_id": "1", "kind": "post", "text": "pic", "created_at": "2026-06-30T10:00:00Z",
+            "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0,
+            "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/x.jpg", "alt": ""}]}]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.0)
+  r = client.get("/")
+  assert 'draggable="false"' in r.text
+  assert "-webkit-user-drag: none" in r.text
+
+def test_newsletter_body_contains_overscroll(client):
+  r = client.get("/")
+  assert "overscroll-behavior: contain" in r.text
 
 def test_photo_renders_as_div_not_link():
   src = MACROS_HTML.read_text()

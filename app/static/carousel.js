@@ -12,6 +12,7 @@
 
   function isFormField(el) { return el && el.closest && el.closest('input, textarea, select, [contenteditable]'); }
   function isNewsletterBody(el) { return el && el.closest ? el.closest('.newsletter-body') : null; }
+  function isSelectableText(el) { return el && el.closest && el.closest('.text-content'); }
 
   function allCards() {
     return Array.prototype.slice.call(carousel.querySelectorAll('.newsletter-card'));
@@ -55,16 +56,16 @@
     body.scrollTop += delta;
   }
 
-  // Returns true if body can absorb this wheel delta (has more content to scroll toward)
-  function bodyCanScroll(body, deltaY) {
-    if (!body) return false;
-    if (deltaY < 0 && body.scrollTop > 0) return true;
-    if (deltaY > 0 && body.scrollTop < body.scrollHeight - body.clientHeight - 1) return true;
-    return false;
+  // True if the body has any scrollable content at all. Once it does, wheel always
+  // scrolls it vertically (even at the top/bottom edge) instead of chaining into the
+  // carousel — that edge-triggered handoff felt jarring while reading a long newsletter.
+  function bodyHasOverflow(body) {
+    return !!body && body.scrollHeight > body.clientHeight + 1;
   }
 
   carousel.addEventListener('mousedown', function(e) {
     if (e.target.closest('a, button, input, label, select, textarea')) return;
+    if (isSelectableText(e.target)) return; // let native text selection happen, no custom drag
     down = true;
     startX = e.clientX; startY = e.clientY;
     scrollLeft = carousel.scrollLeft;
@@ -102,7 +103,7 @@
     if (e.deltaX !== 0) return;
     if (e.deltaY === 0) return;
     var body = e.target.closest ? e.target.closest('.newsletter-body') : null;
-    if (bodyCanScroll(body, e.deltaY)) return;
+    if (bodyHasOverflow(body)) return;
     e.preventDefault();
     carousel.scrollLeft += e.deltaY;
   }, { passive: false });

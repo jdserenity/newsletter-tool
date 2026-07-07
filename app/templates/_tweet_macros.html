@@ -4,11 +4,11 @@
   {% for m in media_list %}
   {% if m.type == 'photo' %}
   <div class="media-thumb">
-    <img src="{{ m.url }}" alt="{{ m.alt }}" loading="lazy">
+    <img src="{{ m.url }}" alt="{{ m.alt }}" loading="lazy" draggable="false">
   </div>
   {% else %}
   <a href="{{ m.link_url or link_url }}" class="media-thumb media-thumb-video" target="_blank" rel="noopener noreferrer">
-    <img src="{{ m.url }}" alt="{{ m.alt }}" loading="lazy">
+    <img src="{{ m.url }}" alt="{{ m.alt }}" loading="lazy" draggable="false">
     <span class="media-play" aria-hidden="true"></span>
   </a>
   {% endif %}
@@ -23,7 +23,7 @@
   <div class="quoted-label muted">
     quoted{% if quoted.handle %} · <a href="{{ quoted.url }}">@{{ quoted.handle }}</a>{% endif %}
   </div>
-  <div class="tweet-text">{{ quoted.text }}</div>
+  <div class="tweet-text"><span class="text-content">{{ quoted.text }}</span></div>
   {{ tweet_media(quoted.media, quoted.url) }}
 </div>
 {% endif %}

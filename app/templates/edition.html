@@ -10,7 +10,7 @@
 
 {% for item in items %}
 <div class="tweet">
-  <div class="tweet-text">{{ item.text }}</div>
+  <div class="tweet-text"><span class="text-content">{{ item.text }}</span></div>
   {{ tweet_media(item.media, item.url) }}
   {{ quoted_block(item.quoted) }}
   <div class="meta">

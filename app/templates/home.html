@@ -38,10 +38,10 @@
     </div>
     <div class="newsletter-body">
       {% if e %}
-      <div class="week-label muted">Week of {{ e.week_start[:10] }} · {{ e.item_count }} items · ${{ "%.2f"|format(e.cost_usd) }}</div>
+      <div class="week-label muted"><span class="text-content">Week of {{ e.week_start[:10] }} · {{ e.item_count }} items · ${{ "%.2f"|format(e.cost_usd) }}</span></div>
       {% for item in card.entries %}
       <div class="tweet">
-        <div class="tweet-text">{{ item.text }}</div>
+        <div class="tweet-text"><span class="text-content">{{ item.text }}</span></div>
         {{ tweet_media(item.media, item.url) }}
         {{ quoted_block(item.quoted) }}
         <div class="meta">
