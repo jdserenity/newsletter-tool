@@ -5,6 +5,14 @@ from datetime import datetime, timedelta, timezone
 from app import db
 from app.fetch.client import XClient, classify_tweet, COST_PER_USER_READ
 
+def _post_read_tweet_ids(tweets):
+  """Timeline tweet IDs plus expanded quoted tweets — each can bill as a post read."""
+  ids = []; seen = set()
+  for t in tweets:
+    for tid in (t["id"], (t.get("quoted_tweet") or {}).get("id")):
+      if tid and tid not in seen: ids.append(tid); seen.add(tid)
+  return ids
+
 def week_bounds(now=None):
   """Most recent complete Mon-Mon week as (start_iso, end_iso)."""
   now = now or datetime.now(timezone.utc)
@@ -24,10 +32,10 @@ def fetch_account_week(conn, client, account, week_start, week_end, now=None):
     db.record_api_call(conn, account["id"], "users/by/username", 1 if uc else 0, uc); cost += uc
     db.set_account_identity(conn, account["id"], user["id"], user.get("name", account["handle"]))
     account = db.get_account(conn, account_id=account["id"])
-  tweets, _ = client.get_user_tweets(
+  tweets, _, _ = client.get_user_tweets(
     account["x_user_id"], week_start, week_end,
     include_replies=bool(account["include_replies"]), include_retweets=bool(account["include_retweets"]))
-  tweet_ids = [t["id"] for t in tweets]
+  tweet_ids = _post_read_tweet_ids(tweets)
   c = db.post_read_cost(conn, tweet_ids, now=now)
   billable = db.billable_post_count(conn, tweet_ids, now=now)
   db.record_api_call(conn, account["id"], "users/:id/tweets", billable, c); cost += c

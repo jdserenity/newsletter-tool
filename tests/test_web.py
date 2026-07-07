@@ -31,6 +31,12 @@ def test_home_empty(client):
   assert "Estimate cost" in r.text
   assert "digest" not in r.text.lower()
   assert "tracked account" not in r.text.lower()
+  assert "log off without losing the signal" in r.text
+  assert 'class="site-brand"' in r.text
+  assert "min-height:" in r.text and "newsletter-card" in r.text
+  assert "flex-wrap: nowrap" in r.text and "newsletter-toolbar" in r.text
+  assert "justify-content: space-between" in r.text
+  assert "flex-direction: column" in r.text and "newsletter-identity" in r.text
 
 def test_add_account(client):
   r = client.post("/accounts", data={"handle": "@alice"}, follow_redirects=True)
@@ -44,6 +50,27 @@ def test_remove_account_via_api(client):
   aid = db.get_account(c, handle="alice")["id"]
   r = client.post(f"/accounts/{aid}/remove", follow_redirects=True)
   assert "@alice" not in r.text
+  assert "/settings" in str(r.request.url)
+
+def test_settings_page_lists_accounts_and_remove(client):
+  client.post("/accounts", data={"handle": "@alice"})
+  client.post("/accounts", data={"handle": "bob"})
+  r = client.get("/settings")
+  assert r.status_code == 200
+  assert "Settings" in r.text
+  assert "@alice" in r.text
+  assert "@bob" in r.text
+  assert r.text.count("/remove") == 2
+  c = db.connect(client.db_path)
+  aid = db.get_account(c, handle="alice")["id"]
+  r = client.post(f"/accounts/{aid}/remove", follow_redirects=True)
+  assert "@alice" not in r.text
+  assert "@bob" in r.text
+
+def test_settings_page_empty(client):
+  r = client.get("/settings")
+  assert r.status_code == 200
+  assert "No tracked accounts yet" in r.text
 
 def test_home_multiple_accounts_shows_carousel_and_add_card(client):
   client.post("/accounts", data={"handle": "alice"})
@@ -96,6 +123,47 @@ def test_edition_page_renders(client):
   r = client.get(f"/editions/{eid}")
   assert r.status_code == 200
   assert "hello world" in r.text; assert "$0.020" in r.text
+
+def test_edition_page_renders_media(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [{"tweet_id": "1", "kind": "post", "text": "sunset pic", "created_at": "2026-06-30T10:00:00Z",
+            "url": "https://x.com/alice/status/1", "likes": 3, "reposts": 1,
+            "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/x.jpg?name=medium", "alt": "sky"}]}]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.02)
+  eid = db.list_editions(c)[0]["id"]
+  r = client.get(f"/editions/{eid}")
+  assert 'class="tweet-media"' in r.text
+  assert 'src="https://pbs.twimg.com/media/x.jpg?name=medium"' in r.text
+  assert 'alt="sky"' in r.text
+
+def test_edition_page_renders_quoted_media(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [{"tweet_id": "2", "kind": "quote", "text": "my take", "created_at": "2026-06-30T10:00:00Z",
+            "url": "https://x.com/alice/status/2", "likes": 1, "reposts": 0,
+            "quoted": {"tweet_id": "999", "handle": "bob", "text": "bob pic", "url": "https://x.com/bob/status/999",
+                       "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/q.jpg?name=medium", "alt": ""}]}}]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.02)
+  eid = db.list_editions(c)[0]["id"]
+  r = client.get(f"/editions/{eid}")
+  assert 'class="quoted-tweet"' in r.text
+  assert "@bob" in r.text
+  assert "bob pic" in r.text
+  assert 'src="https://pbs.twimg.com/media/q.jpg?name=medium"' in r.text
+
+def test_edition_page_video_has_play_button(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [{"tweet_id": "1", "kind": "post", "text": "watch this", "created_at": "2026-06-30T10:00:00Z",
+            "url": "https://x.com/alice/status/1", "likes": 1, "reposts": 0,
+            "media": [{"type": "video", "url": "https://pbs.twimg.com/thumb.jpg", "alt": "",
+                       "link_url": "https://x.com/alice/status/1/video/1"}]}]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.02)
+  eid = db.list_editions(c)[0]["id"]
+  r = client.get(f"/editions/{eid}")
+  assert "media-thumb-video" in r.text
+  assert 'href="https://x.com/alice/status/1/video/1"' in r.text
 
 def test_rss_feed(client):
   aid = _seed_edition(client.db_path)

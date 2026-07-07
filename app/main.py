@@ -8,6 +8,7 @@ load_env()
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -17,6 +18,7 @@ from app.scheduler import start_scheduler
 from app.user_actions import UserActionsClient, follow_tracked_account, resume_like_drain_if_needed, retry_pending_follows, retry_pending_follows_on_startup
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config=None):
@@ -34,6 +36,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     if scheduler: scheduler.shutdown(wait=False)
 
   app = FastAPI(title="newsletter-tool", lifespan=lifespan)
+  app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
   app.state.db_path = path
   app.state.auth_config = auth_config
 
@@ -112,6 +115,10 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     after_authenticated_request(c, request)
     return render(request, "home.html", {"cards": newsletter_cards(c)})
 
+  @app.get("/settings", response_class=HTMLResponse)
+  def settings_page(request: Request):
+    return render(request, "settings.html", {"accounts": db.list_accounts(conn())})
+
   @app.post("/accounts")
   def add_account(request: Request, handle: str = Form(...)):
     c = conn()
@@ -143,7 +150,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   @app.post("/accounts/{account_id}/remove")
   def remove_account(account_id: int):
     db.remove_account(conn(), account_id)
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/settings", status_code=303)
 
   @app.get("/accounts/{account_id}")
   def account_page(account_id: int):

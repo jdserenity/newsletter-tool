@@ -165,7 +165,12 @@ def save_tweets(conn, account_id, tweets, fetched_at=None):
   else: ts = fetched_at
   for t in tweets:
     conn.execute(
-      "INSERT OR IGNORE INTO tweets (account_id, tweet_id, kind, text, created_at, raw_json, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      """INSERT INTO tweets (account_id, tweet_id, kind, text, created_at, raw_json, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(tweet_id) DO UPDATE SET
+           account_id = excluded.account_id, kind = excluded.kind, text = excluded.text,
+           created_at = excluded.created_at, raw_json = excluded.raw_json,
+           fetched_at = excluded.fetched_at""",
       (account_id, t["id"], t.get("kind", "post"), t["text"], t["created_at"], json.dumps(t), ts))
   conn.commit()
 
@@ -187,7 +192,15 @@ def billable_post_count(conn, tweet_ids, now=None):
     f"SELECT tweet_id FROM tweets WHERE tweet_id IN ({placeholders}) AND fetched_at >= ?",
     (*tweet_ids, cutoff)).fetchall()
   recent = {r["tweet_id"] for r in rows}
-  return len(tweet_ids) - len(recent)
+  remaining = [tid for tid in tweet_ids if tid not in recent]
+  if remaining:
+    want = set(remaining)
+    for r in conn.execute("SELECT raw_json FROM tweets WHERE fetched_at >= ?", (cutoff,)).fetchall():
+      try:
+        qt = json.loads(r["raw_json"]).get("quoted_tweet")
+        if qt and qt.get("id") in want: recent.add(qt["id"])
+      except (json.JSONDecodeError, TypeError): pass
+  return len([tid for tid in tweet_ids if tid not in recent])
 
 def post_read_cost(conn, tweet_ids, now=None):
   from app.fetch.client import COST_PER_POST_READ

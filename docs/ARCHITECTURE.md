@@ -14,12 +14,14 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Per-account visibility into X API cost incurred by that account, computed from rows in the `api_calls` table (no log files).
 - Before adding a new account, **Estimate cost** on the add card calls X `GET /2/tweets/counts/all` three times (one per complete Mon–Mon week, oldest to newest) at ~$0.01/request (~$0.03 total). The app averages those tweet counts and projects weekly fetch cost as `avg_tweets × $0.005 + $0.01` user lookup, using default new-account settings (replies and retweets excluded at the API; quotes always counted). Rejects handles already tracked. Does not write to `api_calls`.
 - Homepage: horizontally scrollable carousel of newsletter cards (one per account). Each card shows settings toggles, API cost, and the latest newsletter inline — no separate account list or detail page. On load, missing newsletters are built from stored tweets when the current week has tweets but no edition row (no X API calls).
+- Settings page at `/settings`: list tracked accounts with remove actions. Linked from a Settings button in the site header (left of Sign out).
+- Carousel navigation: mouse wheel over card chrome or gaps scrolls horizontally between cards; wheel over the newsletter body scrolls vertically inside that card. Left/right arrow keys move between cards; up/down arrow keys scroll inside the centered card. Card bodies and the carousel hide scrollbars.
 - RSS feed structure is not finalized (per-account vs consolidated recap). v1 ships per-account feeds at `/feeds/{id}.xml` as the baseline.
 
 ## Tech stack
 - Backend: Python + FastAPI — one app serves web pages, RSS, and the weekly fetch.
 - Database: SQLite (single file). Path from `DATABASE_PATH` in `.env` (or the process environment on the VPS). Default: `~/.local/share/newsletter-tool/newsletter.db` — outside the repo so git worktrees share one database. Raw API responses cached in the DB so newsletters can be rebuilt without refetching.
-- Frontend: server-rendered Jinja2 templates; small inline JS for carousel drag-scroll. No JS framework, no build step.
+- Frontend: server-rendered Jinja2 templates; `app/static/carousel.js` for carousel drag-scroll, spatial wheel zones, and arrow-key navigation. No JS framework, no build step.
 - Scheduling: APScheduler inside the app (weekly fetch, Monday 06:00 UTC). Can be reduced to cron later.
 - Hosting: owner's VPS.
 
@@ -30,6 +32,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - **App credentials (server):** `X_BEARER_TOKEN` — used by the weekly fetch job and other read-only API calls that act as the app, not as a logged-in user.
 - **User OAuth 2.0 (browser):** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET` — OAuth 2.0 Authorization Code with PKCE. All web routes except `/auth/*` require a signed-in X user session. Scopes at sign-in: `users.read`, `tweet.read`, `like.write`, `follows.write`, `offline.access`. Optional `X_OAUTH_SCOPES` overrides that list. Bearer-token fetch and scheduling do not use the user session.
 - **Owner actions on X:** Adding a tracked account triggers a follow from the signed-in owner account (POST follow; no pre-check of the following list). After each weekly newsletter is built, tweets that made it into the edition are queued and a background thread drains the queue: first like immediately, then ~1 minute ± 1–20s between each until done. OAuth tokens persist in `oauth_session` (refreshed while draining). Already-liked tweet IDs are stored in `liked_tweets`; pending likes live in `like_queue`. On app startup, a non-empty queue resumes draining.
+- **Tweet media:** Weekly fetch requests `attachments.media_keys` and `referenced_tweets.id` expansions (quoted posts bill as extra post reads). Expanded media is stored on each tweet's `raw_json`; quote tweets also store `quoted_tweet` with its media. Newsletter items include `media` and optional `quoted` blocks. Photos render inline via `pbs.twimg.com` URLs; videos and GIFs show a preview thumbnail linking to the tweet on X. Media-related `t.co` short links are stripped from displayed text at build time. Post-read units recorded in `api_calls` count timeline tweets plus any expanded referenced tweets (unique IDs per response page).
 
 ## System layout
 Single repo, single FastAPI app:

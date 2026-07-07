@@ -17,6 +17,9 @@ mv /path/to/old/data/newsletter.db ~/.local/share/newsletter-tool/
 ## Fetch vs newsletter filtering
 Replies and retweets can be excluded at the API via the `exclude` parameter — those tweets are never fetched and never billed. Quote tweets cannot be excluded server-side; they are always fetched and filtered in the newsletter builder when `include_quotes` is off.
 
+## Tweet media
+Media URLs come from the X API `attachments.media_keys` expansion (no extra post-read charge). Quote tweets also expand `referenced_tweets.id` — each quoted post is an additional ~$0.005 post read. `api_calls.units` counts timeline tweets plus expanded referenced tweets per response page (matches X billing: different posts in one request each count separately). `save_tweets` upserts on refetch so enriched `raw_json` (media, quoted tweets) replaces stale rows. Tweets already in the DB before media/quote expansion need one refetch after that fix landed.
+
 ## Terminology
 The product is **Newsletter Tool**. Never use the word "digest" in code, templates, or docs. Weekly snapshots live in the `editions` table. The old `digests` table is renamed automatically on connect.
 

@@ -89,6 +89,10 @@ def test_callback_exchanges_code_and_sets_session(auth_client, monkeypatch):
   r = auth_client.get("/")
   assert r.status_code == 200
   assert "owner" in r.text.lower() or "@owner" in r.text
+  assert 'class="site-user"' in r.text
+  assert "Signed in as" in r.text
+  assert 'href="/settings"' in r.text
+  assert 'class="site-actions"' in r.text
 
 def test_add_account_follows_from_owner_session(auth_client, monkeypatch):
   follow_calls = []

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_tweet_macros.html" import tweet_media, quoted_block %}
 {% block content %}
 <div class="carousel" id="newsletter-carousel">
   {% for card in cards %}
@@ -37,10 +38,12 @@
     </div>
     <div class="newsletter-body">
       {% if e %}
-      <div class="week-label muted">Week of {{ e.week_start[:10] }} · {{ e.item_count }} items · ${{ "%.2f"|format(e.cost_usd) }}</div>
+      <div class="week-label muted"><span class="text-content">Week of {{ e.week_start[:10] }} · {{ e.item_count }} items · ${{ "%.2f"|format(e.cost_usd) }}</span></div>
       {% for item in card.entries %}
       <div class="tweet">
-        <div class="tweet-text">{{ item.text }}</div>
+        <div class="tweet-text"><span class="text-content">{{ item.text }}</span></div>
+        {{ tweet_media(item.media, item.url) }}
+        {{ quoted_block(item.quoted) }}
         <div class="meta">
           <span class="pill">{{ item.kind }}</span>
           {{ item.created_at[:16].replace("T", " · ") }} ·
@@ -71,33 +74,9 @@
     </form>
   </article>
 </div>
+<script src="/static/carousel.js"></script>
 <script>
 (function() {
-  var carousel = document.getElementById('newsletter-carousel');
-  if (carousel) {
-    var down = false, startX = 0, scrollLeft = 0;
-    carousel.addEventListener('mousedown', function(e) {
-      if (e.target.closest('a, button, input, label, select, textarea')) return;
-      down = true; startX = e.clientX; scrollLeft = carousel.scrollLeft;
-      carousel.classList.add('dragging');
-    });
-    document.addEventListener('mouseup', function() {
-      if (!down) return;
-      down = false; carousel.classList.remove('dragging');
-    });
-    document.addEventListener('mousemove', function(e) {
-      if (!down) return;
-      e.preventDefault();
-      carousel.scrollLeft = scrollLeft - (e.clientX - startX);
-    });
-    carousel.addEventListener('wheel', function(e) {
-      if (e.deltaX !== 0) return;
-      if (e.deltaY === 0) return;
-      e.preventDefault();
-      carousel.scrollLeft += e.deltaY;
-    }, { passive: false });
-  }
-
   var input = document.getElementById('handle-input');
   var form = document.getElementById('add-account-form');
   var estimateBtn = document.getElementById('estimate-btn');

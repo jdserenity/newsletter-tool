@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block body_class %}page-settings{% endblock %}
+{% block title %}Settings — Newsletter Tool{% endblock %}
+{% block content %}
+<div class="settings-panel">
+  <h2>Settings</h2>
+  <p class="muted">Remove tracked accounts you no longer want newsletters for.</p>
+  {% for a in accounts %}
+  <div class="card row">
+    <div>
+      <strong>@{{ a.handle }}</strong>
+      {% if a.display_name %}<span class="muted"> — {{ a.display_name }}</span>{% endif %}
+    </div>
+    <form method="post" action="/accounts/{{ a.id }}/remove">
+      <button class="ghost" type="submit">Remove</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="muted">No tracked accounts yet.</p>
+  {% endfor %}
+  <p class="muted"><a href="/">← Back to home</a></p>
+</div>
+{% endblock %}
