@@ -65,8 +65,13 @@ def test_settings_page_lists_accounts_and_remove(client):
   assert "2" in r.text and "tracked account" in r.text
   assert "API cost this month" in r.text
   c = db.connect(client.db_path)
-  aid = db.get_account(c, handle="alice")["id"]
-  r = client.post(f"/accounts/{aid}/remove", follow_redirects=True)
+  aid_alice = db.get_account(c, handle="alice")["id"]
+  aid_bob = db.get_account(c, handle="bob")["id"]
+  assert r.text.count('class="rss-link"') == 2
+  assert f'href="/feeds/{aid_alice}.xml"' in r.text
+  assert f'href="/feeds/{aid_bob}.xml"' in r.text
+  assert 'target="_blank"' in r.text and 'rel="noopener noreferrer"' in r.text
+  r = client.post(f"/accounts/{aid_alice}/remove", follow_redirects=True)
   assert "@alice" not in r.text
   assert "@bob" in r.text
 
@@ -149,11 +154,17 @@ def test_edition_page_renders(client):
   assert r.status_code == 200
   assert "hello world" in r.text
   assert "$0.02" in r.text
-  # Homepage locks scroll for the carousel; edition pages must re-enable page scroll.
+  # Homepage locks html+body overflow for the carousel; edition pages unlock both.
   assert 'class="page-edition"' in r.text
-  assert "overflow: auto" in r.text
+  assert "html:has(body.page-edition)" in r.text
   assert "edition-panel" in r.text
   assert "← Home" in r.text
+
+def test_settings_page_unlocks_document_scroll(client):
+  r = client.get("/settings")
+  assert r.status_code == 200
+  assert 'class="page-settings"' in r.text
+  assert "html:has(body.page-settings)" in r.text
 
 def test_edition_page_renders_media(client):
   c = db.connect(client.db_path)

@@ -37,7 +37,12 @@
     background: transparent; color: var(--muted); border: 1px solid var(--border);
     font-size: 0.9rem; text-decoration: none;
   }
-  body.page-settings, body.page-edition { overflow: auto; height: auto; min-height: 100%; }
+  /* Homepage locks html+body so the carousel owns scroll. Non-carousel pages must
+     unlock BOTH: body-only overrides leave html { overflow: hidden } and the page still won't scroll. */
+  html:has(body.page-settings), html:has(body.page-edition),
+  body.page-settings, body.page-edition {
+    overflow: auto; height: auto; min-height: 100%;
+  }
   .settings-panel { padding: 0 1.25rem; max-width: 42rem; }
   .edition-panel { padding: 0 1.25rem 2rem; max-width: calc(var(--card-width) + 2.5rem); margin: 0 auto; }
   .edition-back { margin: 0 0 0.75rem; }
