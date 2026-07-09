@@ -33,7 +33,9 @@ Not email. Not multi-user. Hosted on your VPS as a subdomain.
 
 **Reading flow:** check off individual tweets (they dim and sink to the bottom). When every tweet is checked, the big newsletter checkmark moves to the **top** of the card so you can dismiss the whole week without scrolling. Empty weeks keep that checkmark at the bottom.
 
-**Carousel:** scroll sideways between accounts; scroll inside a card for long weeks. Toolbar toggles and checkmarks save in place (no full page reload).
+**Carousel:** scroll sideways between accounts; scroll inside a card for long weeks. Toolbar toggles and checkmarks save in place (no full page reload). On a phone, each card is nearly full-screen width with snap-between-cards scrolling; the tall desktop toolbar stacks so toggles stay tappable.
+
+**Home screen icon:** same cream serif **Y** as the browser tab favicon (iOS “Add to Home Screen” uses the Apple touch icon / web app manifest, not the small tab icon alone).
 
 ## How the system is built
 

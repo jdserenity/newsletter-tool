@@ -12,7 +12,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - **Estimate cost** (add card): 3× `GET /2/tweets/counts/all` (complete Mon–Mon weeks, oldest→newest) ≈ $0.01 each ≈ $0.03. Project weekly fetch as `avg_tweets × $0.005 + $0.01` user lookup; default new-account filters (replies/retweets excluded at API; quotes always counted). Rejects already-tracked handles. Does **not** write `api_calls`.
 - Homepage: horizontal carousel of account cards (settings toggles, cost, latest newsletter inline). No separate account detail page. On load: `repair_missing_editions` builds missing editions from stored tweets when current week has tweets but no edition (no X API). GET `/` must not block on X network: token refresh + pending follows run via `schedule_owner_maintenance` (background). Access tokens stored with `oauth_session.expires_at`; refresh only near/after expiry.
 - Account lists: `ORDER BY handle COLLATE NOCASE`.
-- Favicon: serif **Y** on cream (`/static/favicon.svg` + PNG).
+- Favicon / home-screen icon: serif **Y** on cream (`/static/favicon.svg` + PNG). Same mark for iOS Add to Home Screen via `apple-touch-icon.png` (180) + `site.webmanifest` (`icon-192` / `icon-512`).
 
 ## Stack
 - Python 3.11+ / FastAPI / Jinja2 / SQLite / APScheduler / httpx
@@ -71,7 +71,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - **In-place actions:** settings toggles + mark-read via `fetch` + JSON (`home.js`). No full-page POST/redirect (would reset carousel scrollLeft).
 - **Long text:** fetch requests `note_tweet`; UI clamps 8 lines + More/Less.
 - **Header:** Settings left of Sign out; on `/settings` control is Home → `/`.
-- **Carousel:** wheel on chrome/gaps → horizontal; wheel on body → vertical in card. ←/→ cards; ↑/↓ scroll centered card. Scrollbars hidden.
+- **Carousel:** wheel on chrome/gaps → horizontal; wheel on body → vertical in card. ←/→ cards; ↑/↓ scroll centered card. Scrollbars hidden. ≤700px: card width ≈ viewport, horizontal scroll-snap, stacked toolbar/toggles, ~44px tap targets, safe-area insets.
 - Homepage locks `html,body { overflow: hidden }`; settings/edition unlock via `html:has(body.page-…)` + body class.
 
 ## X API

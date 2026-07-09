@@ -102,6 +102,42 @@ def test_home_has_favicon(client):
   png = client.get("/static/favicon.png")
   assert png.status_code == 200
 
+def test_home_has_apple_touch_icon_matching_favicon(client):
+  # iOS "Add to Home Screen" uses apple-touch-icon, not the tab favicon.
+  r = client.get("/")
+  assert 'rel="apple-touch-icon"' in r.text
+  assert 'href="/static/apple-touch-icon.png"' in r.text
+  assert 'href="/static/site.webmanifest"' in r.text
+  assert 'name="apple-mobile-web-app-capable"' in r.text
+  assert 'name="theme-color"' in r.text
+  icon = client.get("/static/apple-touch-icon.png")
+  assert icon.status_code == 200
+  assert "image/png" in icon.headers.get("content-type", "")
+  assert icon.content[:8] == b"\x89PNG\r\n\x1a\n"
+  # Same cream field as favicon.svg (#e8e6d7) — crude check via 192/512 siblings + manifest
+  manifest = client.get("/static/site.webmanifest")
+  assert manifest.status_code == 200
+  body = manifest.text
+  assert "icon-192.png" in body
+  assert "icon-512.png" in body
+  assert "apple-touch-icon.png" in body
+  assert "#e8e6d7" in body
+  for path in ("/static/icon-192.png", "/static/icon-512.png"):
+    p = client.get(path)
+    assert p.status_code == 200
+    assert p.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+def test_mobile_layout_uses_full_width_cards_and_scroll_snap(client):
+  r = client.get("/")
+  # narrow screens must not keep a fixed 600px card (unusable on phones)
+  assert "@media (max-width: 700px)" in r.text
+  assert "--card-width: calc(100vw - 2 * var(--pad-x)" in r.text
+  assert "scroll-snap-type: x mandatory" in r.text
+  assert "scroll-snap-align: center" in r.text
+  assert "min-height: 44px" in r.text  # tap targets
+  assert "viewport-fit=cover" in r.text
+  assert "safe-area-inset" in r.text
+
 def test_home_multiple_accounts_shows_carousel_and_add_card(client):
   client.post("/accounts", data={"handle": "alice"})
   client.post("/accounts", data={"handle": "bob"})
