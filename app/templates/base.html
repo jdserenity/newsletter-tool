@@ -2,15 +2,27 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Mentally Stable X Experience{% endblock %}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}More Mentally Stable X Experience{% endblock %}</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/static/favicon.png" type="image/png" sizes="64x64">
+<!-- Same cream serif-Y mark as the favicon; iOS home-screen / Add to Home Screen uses apple-touch-icon. -->
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="/static/site.webmanifest">
+<meta name="theme-color" content="#e8e6d7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Stable X">
 <style>
   :root {
     --bg: #f7f5f0; --card: #ffffff; --ink: #1a1a1a; --muted: #6b6b6b;
     --accent: #2f5d62; --accent-soft: #e4eeee; --border: #e5e1d8; --radius: 12px;
     --card-width: 600px;
+    --pad-x: 1.25rem;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
   }
   * { box-sizing: border-box; }
   html, body { overflow: hidden; height: 100%; }
@@ -18,10 +30,13 @@
     margin: 0; background: var(--bg); color: var(--ink);
     font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; line-height: 1.55;
   }
-  .wrap { margin: 0; padding: 2rem 0 3rem; }
+  .wrap {
+    margin: 0; padding: calc(2rem + var(--safe-top)) 0 calc(3rem + var(--safe-bottom));
+    padding-left: var(--safe-left); padding-right: var(--safe-right);
+  }
   header.site {
     display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;
-    margin-bottom: 1.5rem; padding: 0 1.25rem;
+    margin-bottom: 1.5rem; padding: 0 var(--pad-x);
   }
   .site-brand { min-width: 0; }
   header.site h1 { font-size: 1.35rem; margin: 0; letter-spacing: -0.01em; }
@@ -43,8 +58,8 @@
   body.page-settings, body.page-edition {
     overflow: auto; height: auto; min-height: 100%;
   }
-  .settings-panel { padding: 0 1.25rem; max-width: 42rem; }
-  .edition-panel { padding: 0 1.25rem 2rem; max-width: calc(var(--card-width) + 2.5rem); margin: 0 auto; }
+  .settings-panel { padding: 0 var(--pad-x); max-width: 42rem; }
+  .edition-panel { padding: 0 var(--pad-x) 2rem; max-width: calc(var(--card-width) + 2.5rem); margin: 0 auto; }
   .edition-back { margin: 0 0 0.75rem; }
   .edition-card {
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -109,6 +124,12 @@
     margin-top: 1.25rem; padding-top: 0.9rem; border-top: 1px solid var(--border);
     display: flex; justify-content: center;
   }
+  /* When every tweet is checked off, the newsletter checkmark moves to the top
+     so you can finish the card without scrolling past dimmed posts. */
+  .newsletter-footer.is-top {
+    margin-top: 0; margin-bottom: 0.75rem; padding-top: 0; padding-bottom: 0.75rem;
+    border-top: none; border-bottom: 1px solid var(--border);
+  }
   .mark-check.mark-check-lg { font-size: 1.25rem; }
   .tweet-media { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; }
   .media-thumb { position: relative; display: block; line-height: 0; }
@@ -133,9 +154,11 @@
 
   .carousel {
     display: flex; gap: 1rem; overflow-x: auto; overflow-y: hidden;
-    width: 100%; max-width: 100%; padding: 0 1.25rem 1rem;
+    width: 100%; max-width: 100%; padding: 0 var(--pad-x) 1rem;
     cursor: grab;
     -ms-overflow-style: none; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
   }
   .carousel::-webkit-scrollbar { display: none; }
   .carousel.dragging { cursor: grabbing; user-select: none; }
@@ -145,7 +168,9 @@
     flex: 0 0 var(--card-width); width: var(--card-width);
     cursor: grab;
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-    display: flex; flex-direction: column; max-height: calc(100vh - 8rem); min-height: 600px;
+    display: flex; flex-direction: column;
+    max-height: calc(100vh - 8rem); max-height: calc(100dvh - 8rem);
+    min-height: min(600px, calc(100dvh - 8rem));
     overflow: hidden;
   }
   .newsletter-toolbar {
@@ -207,20 +232,80 @@
   }
   .estimate-result.error { background: #fde8e8; color: #8b1e1e; }
   .estimate-result strong { color: var(--ink); }
+
+  /* Phones / narrow viewports: full-width cards, stacked chrome, larger tap targets.
+     Desktop carousel stays a fixed 600px strip with mouse drag + arrows. */
+  @media (max-width: 700px) {
+    :root {
+      --card-width: calc(100vw - 2 * var(--pad-x) - var(--safe-left) - var(--safe-right));
+      --pad-x: 0.85rem;
+    }
+    .wrap { padding-top: calc(1rem + var(--safe-top)); padding-bottom: calc(1.25rem + var(--safe-bottom)); }
+    header.site {
+      flex-direction: column; align-items: stretch; gap: 0.65rem; margin-bottom: 0.85rem;
+    }
+    header.site h1 { font-size: 1.1rem; line-height: 1.25; }
+    header.site .tag { font-size: 0.8rem; }
+    .site-user {
+      flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      text-align: left; gap: 0.5rem;
+    }
+    .site-actions { flex-wrap: wrap; }
+    a.ghost, button.ghost, button {
+      min-height: 44px; padding: 0.55rem 0.95rem; /* ~44px Apple HIG tap target */
+    }
+    .carousel {
+      gap: 0.65rem; padding-bottom: 0.5rem;
+      scroll-snap-type: x mandatory; scroll-padding-inline: var(--pad-x);
+    }
+    .newsletter-card {
+      scroll-snap-align: center; scroll-snap-stop: always;
+      max-height: calc(100vh - 6.5rem); max-height: calc(100dvh - 6.5rem - var(--safe-top) - var(--safe-bottom));
+      min-height: 0;
+    }
+    .newsletter-toolbar {
+      flex-wrap: wrap; align-items: flex-start; gap: 0.5rem 0.65rem; padding: 0.75rem 0.85rem;
+    }
+    .newsletter-identity { flex: 1 1 100%; max-width: 100%; }
+    .newsletter-meta { flex: 1 1 auto; }
+    .settings-row {
+      flex: 1 1 100%; justify-content: flex-start; flex-wrap: wrap; gap: 0.45rem 0.75rem;
+    }
+    .toggle { font-size: 0.74rem; gap: 0.3rem; min-height: 44px; }
+    .toggle-rail { width: 46px; height: 28px; }
+    .toggle-thumb { width: 24px; height: 24px; }
+    .toggle input:checked + .toggle-rail .toggle-thumb { transform: translateX(18px); }
+    .newsletter-body { padding: 0.65rem 0.85rem 0.85rem; }
+    .mark-check {
+      min-width: 44px; min-height: 44px; padding: 0.5rem; font-size: 1.15rem;
+    }
+    .mark-check.mark-check-lg { font-size: 1.45rem; min-width: 48px; min-height: 48px; }
+    .add-card { padding: 1.5rem 1rem; }
+    .add-row { flex-direction: column; }
+    .add-row input { min-width: 0; width: 100%; min-height: 44px; font-size: 16px; /* avoid iOS zoom on focus */ }
+    .add-actions { flex-direction: column; }
+    .add-actions button { width: 100%; }
+    .settings-panel .card.row { align-items: flex-start; }
+    .settings-panel .site-actions { width: 100%; justify-content: flex-start; }
+  }
 </style>
 </head>
 <body class="{% block body_class %}{% endblock %}">
 <div class="wrap">
   <header class="site">
     <div class="site-brand">
-      <h1><a href="/">Mentally Stable X Experience</a></h1>
+      <h1><a href="/">More Mentally Stable X Experience</a></h1>
       <p class="tag">log off without losing the signal</p>
     </div>
     {% if user %}
     <div class="site-user">
       <span class="muted">Signed in as <strong>@{{ user.username }}</strong></span>
       <div class="site-actions">
+        {% if request.url.path.rstrip('/') == '/settings' %}
+        <a class="ghost" href="/">Home</a>
+        {% else %}
         <a class="ghost" href="/settings">Settings</a>
+        {% endif %}
         <form class="inline" method="post" action="/auth/logout"><button class="ghost" type="submit">Sign out</button></form>
       </div>
     </div>

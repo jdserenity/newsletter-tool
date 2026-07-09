@@ -26,7 +26,7 @@ def test_home_builds_newsletter_from_stored_tweets_on_load(client):
 def test_home_empty(client):
   r = client.get("/")
   assert r.status_code == 200
-  assert "Mentally Stable X Experience" in r.text
+  assert "More Mentally Stable X Experience" in r.text
   assert "Newsletter Tool" not in r.text
   assert "Add account" in r.text
   assert "Estimate cost" in r.text
@@ -101,6 +101,42 @@ def test_home_has_favicon(client):
   assert ">Y</text>" in icon.text
   png = client.get("/static/favicon.png")
   assert png.status_code == 200
+
+def test_home_has_apple_touch_icon_matching_favicon(client):
+  # iOS "Add to Home Screen" uses apple-touch-icon, not the tab favicon.
+  r = client.get("/")
+  assert 'rel="apple-touch-icon"' in r.text
+  assert 'href="/static/apple-touch-icon.png"' in r.text
+  assert 'href="/static/site.webmanifest"' in r.text
+  assert 'name="apple-mobile-web-app-capable"' in r.text
+  assert 'name="theme-color"' in r.text
+  icon = client.get("/static/apple-touch-icon.png")
+  assert icon.status_code == 200
+  assert "image/png" in icon.headers.get("content-type", "")
+  assert icon.content[:8] == b"\x89PNG\r\n\x1a\n"
+  # Same cream field as favicon.svg (#e8e6d7) — crude check via 192/512 siblings + manifest
+  manifest = client.get("/static/site.webmanifest")
+  assert manifest.status_code == 200
+  body = manifest.text
+  assert "icon-192.png" in body
+  assert "icon-512.png" in body
+  assert "apple-touch-icon.png" in body
+  assert "#e8e6d7" in body
+  for path in ("/static/icon-192.png", "/static/icon-512.png"):
+    p = client.get(path)
+    assert p.status_code == 200
+    assert p.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+def test_mobile_layout_uses_full_width_cards_and_scroll_snap(client):
+  r = client.get("/")
+  # narrow screens must not keep a fixed 600px card (unusable on phones)
+  assert "@media (max-width: 700px)" in r.text
+  assert "--card-width: calc(100vw - 2 * var(--pad-x)" in r.text
+  assert "scroll-snap-type: x mandatory" in r.text
+  assert "scroll-snap-align: center" in r.text
+  assert "min-height: 44px" in r.text  # tap targets
+  assert "viewport-fit=cover" in r.text
+  assert "safe-area-inset" in r.text
 
 def test_home_multiple_accounts_shows_carousel_and_add_card(client):
   client.post("/accounts", data={"handle": "alice"})
@@ -338,7 +374,48 @@ def test_home_read_tweets_sorted_to_bottom(client):
   i1, i2, i3 = r.text.find("first"), r.text.find("second"), r.text.find("third")
   assert i1 < i3 < i2  # unread chrono first, then read at bottom
 
+def test_newsletter_checkmark_at_bottom_when_unread_tweets(client):
+  _seed_edition(client.db_path)
+  r = client.get("/")
+  body_start = r.text.find('class="newsletter-body"')
+  footer = r.text.find('class="newsletter-footer"', body_start)
+  tweet = r.text.find('class="tweet"', body_start)
+  assert footer > tweet  # footer after tweets while any are unread
+  assert 'class="newsletter-footer is-top"' not in r.text
+
+def test_newsletter_checkmark_moves_to_top_when_all_tweets_read(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [
+    {"tweet_id": "1", "kind": "post", "text": "hello world", "created_at": "2026-06-30T10:00:00Z",
+     "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0},
+    {"tweet_id": "2", "kind": "post", "text": "second post", "created_at": "2026-06-30T11:00:00Z",
+     "url": "https://x.com/alice/status/2", "likes": 0, "reposts": 0},
+  ]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.01)
+  db.mark_tweet_read(c, "1")
+  db.mark_tweet_read(c, "2")
+  r = client.get("/")
+  body_start = r.text.find('class="newsletter-body"')
+  footer = r.text.find('class="newsletter-footer is-top"', body_start)
+  tweet = r.text.find('class="tweet tweet-read"', body_start)
+  assert footer != -1
+  assert footer < tweet  # checkmark above tweets when all are read
+  assert r.text.count('mark-check-newsletter') == 1
+
+def test_empty_newsletter_checkmark_stays_at_bottom(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "quiet")
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", [], 0.0)
+  r = client.get("/")
+  assert "Nothing this week." in r.text
+  assert 'class="newsletter-footer is-top"' not in r.text
+  assert 'class="newsletter-footer"' in r.text
+
 def test_home_loads_home_js_for_in_place_actions(client):
   r = client.get("/")
   assert 'src="/static/home.js"' in r.text
   assert "onchange=" not in r.text or "this.form.submit()" not in r.text
+  js = client.get("/static/home.js")
+  assert js.status_code == 200
+  assert "updateNewsletterCheckPosition" in js.text

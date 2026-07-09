@@ -3,6 +3,7 @@ import base64
 import hashlib
 import os
 import secrets
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
@@ -12,6 +13,8 @@ from app import db
 AUTH_URL = "https://x.com/i/oauth2/authorize"
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
 USER_ME_URL = "https://api.x.com/2/users/me"
+# Refresh a bit before X says the access token dies so we don't use one mid-request.
+TOKEN_REFRESH_SKEW_SECONDS = 120
 
 # Scopes for sign-in plus like/follow actions on newsletter content.
 DEFAULT_SCOPES = ("users.read", "tweet.read", "like.write", "follows.write", "offline.access")
@@ -86,6 +89,28 @@ def refresh_access_token(http, client_id, client_secret, refresh_token):
     "refresh_token": refresh_token, "grant_type": "refresh_token", "client_id": client_id,
   }, client_id, client_secret)
 
+def expires_at_from_token(token, now=None):
+  """ISO UTC expiry from a token response's expires_in seconds, or None if missing."""
+  expires_in = token.get("expires_in")
+  if expires_in is None: return None
+  now = now or datetime.now(timezone.utc)
+  return (now + timedelta(seconds=int(expires_in))).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+def _parse_expires_at(value):
+  if not value: return None
+  s = value.strip()
+  if s.endswith("Z"): s = s[:-1] + "+00:00"
+  return datetime.fromisoformat(s).astimezone(timezone.utc)
+
+def access_token_usable(row, now=None, skew_seconds=TOKEN_REFRESH_SKEW_SECONDS):
+  """True when the stored access token is present and not near expiry."""
+  if not row or not row.get("access_token"): return False
+  try: exp = _parse_expires_at(row.get("expires_at"))
+  except ValueError: return False
+  if exp is None: return False  # unknown expiry → refresh when a refresh_token exists
+  now = now or datetime.now(timezone.utc)
+  return exp > now + timedelta(seconds=skew_seconds)
+
 def fetch_me(http, access_token):
   r = http.get(USER_ME_URL, headers={"Authorization": f"Bearer {access_token}"},
     params={"user.fields": "name,username"})
@@ -113,17 +138,23 @@ def store_user_session(request, token, me):
   request.session[SESSION_NAME] = me.get("name", "")
 
 def persist_session_oauth(conn, request):
-  """Copy browser session tokens into the DB so background jobs can refresh access."""
+  """Bootstrap browser session tokens into the DB for background jobs.
+
+  Does not overwrite an existing DB row: the browser session is only a first-time
+  source. Clobbering would wipe a refreshed access token / expires_at and force
+  needless network refreshes on every page load.
+  """
   uid = request.session.get(SESSION_USER_ID)
   access = request.session.get(SESSION_ACCESS)
   refresh = request.session.get(SESSION_REFRESH)
-  if uid and access and refresh:
-    db.save_oauth_session(conn, uid, access, refresh)
-    return True
-  return False
+  if not (uid and access and refresh): return False
+  existing = db.get_oauth_session(conn)
+  if existing and existing.get("refresh_token"): return False
+  db.save_oauth_session(conn, uid, access, refresh)
+  return True
 
 def owner_access_token(conn, request, config):
-  """Fresh access token for owner actions: DB refresh first, else browser session."""
+  """Usable access token for owner actions: DB (refresh only if needed), else browser session."""
   persist_session_oauth(conn, request)
   access, uid = get_valid_access_token(conn, config)
   if access and uid: return access, uid
@@ -131,10 +162,12 @@ def owner_access_token(conn, request, config):
     return request.session[SESSION_ACCESS], request.session[SESSION_USER_ID]
   return None, None
 
-def get_valid_access_token(conn, config):
-  """Load persisted OAuth tokens, refresh access token, return (access_token, x_user_id) or (None, None)."""
+def get_valid_access_token(conn, config, now=None):
+  """Return (access_token, x_user_id) from DB; refresh over the network only near/after expiry."""
   row = db.get_oauth_session(conn) if conn else None
   if not row or not row.get("refresh_token"): return None, None
+  if access_token_usable(row, now=now):
+    return row["access_token"], row["x_user_id"]
   http = http_client(config)
   try:
     token = refresh_access_token(http, config.client_id, config.client_secret, row["refresh_token"])
@@ -142,7 +175,8 @@ def get_valid_access_token(conn, config):
     return None, None
   access = token["access_token"]
   refresh = token.get("refresh_token") or row["refresh_token"]
-  db.save_oauth_session(conn, row["x_user_id"], access, refresh)
+  db.save_oauth_session(conn, row["x_user_id"], access, refresh,
+    expires_at=expires_at_from_token(token, now=now))
   return access, row["x_user_id"]
 
 def http_client(config):

@@ -57,7 +57,7 @@ def newsletter_feed(account, editions, base_url):
   return (
     '<?xml version="1.0" encoding="UTF-8"?>'
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>'
-    f"<title>Mentally Stable X Experience: {name}</title>"
+    f"<title>More Mentally Stable X Experience: {name}</title>"
     f"<link>{escape(base_url)}/</link>"
     f'<atom:link href="{escape(feed_url)}" rel="self" type="application/rss+xml"/>'
     f"<description>Weekly X newsletter for @{escape(account['handle'])}</description>"

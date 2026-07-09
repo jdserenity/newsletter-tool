@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Sign in{% endblock %}
 {% block content %}
-<div class="card">
-  <p>Sign in with your X account to use this app.</p>
-  <p class="muted">You will be redirected to X to approve access, then returned here.</p>
-  <p><a href="/auth/login/start"><button type="button">Sign in with X</button></a></p>
+<div class="settings-panel">
+  <div class="card">
+    <p>Sign in with your X account to use this app.</p>
+    <p class="muted">You will be redirected to X to approve access, then returned here.</p>
+    <p><a href="/auth/login/start"><button type="button">Sign in with X</button></a></p>
+  </div>
 </div>
 {% endblock %}

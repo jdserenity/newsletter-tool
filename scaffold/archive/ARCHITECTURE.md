@@ -4,7 +4,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 
 ## Product scope
 - Personal tool that turns selected X (Twitter) users' output into clean, filterable, inbox-friendly weekly newsletters, so the owner can log off X without losing high-value signal.
-- Product name in the UI: **Mentally Stable X Experience**. Do not use the word "digest" anywhere in the codebase.
+- Product name in the UI: **More Mentally Stable X Experience**. Do not use the word "digest" anywhere in the codebase.
 - "Inbox-friendly" does not mean email. Email is out of scope.
 - Single user for now (the owner). May become a sellable product later; no multi-tenant work yet.
 - Accessed via a webpage on the owner's VPS, as a subdomain of the owner's personal domain.
@@ -16,10 +16,10 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Homepage: horizontally scrollable carousel of newsletter cards (one per account). Each card shows settings toggles, API cost, and the latest newsletter inline — no separate account list or detail page. On load, missing newsletters are built from stored tweets when the current week has tweets but no edition row (no X API calls).
 - Links out to X (profile, tweet, quoted author, video media) and the per-account RSS feed open in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`). In-app navigation (home, Settings, sign-in) stays in the same tab.
 - Per-tweet mark-read control is a minimal checkmark (no checkbox, no label). Stores the tweet id in `read_tweets`. Read tweets stay visible, dimmed, and sort to the bottom of that newsletter (unread first, chronological within each group). Click again to unread.
-- Per-newsletter mark-read control is the same minimal checkmark at the bottom of every account card (including empty weeks and accounts with no edition yet). Stored in `read_newsletters` as `(account_id, week_start)`. That account's card is removed for that week; a later week's edition shows again.
+- Per-newsletter mark-read control is the same minimal checkmark on every account card (including empty weeks and accounts with no edition yet). It sits at the bottom while any tweet is unread; when every tweet is checked off it moves to the top of that card’s body (still at the bottom for empty weeks / no edition). Stored in `read_newsletters` as `(account_id, week_start)`. That account's card is removed for that week; a later week's edition shows again.
 - Toolbar settings toggles, tweet mark-read, and newsletter mark-read save via `fetch` + JSON (Accept: application/json). They must not full-page POST/redirect — that reloaded `/` and reset the carousel to the leftmost card.
 - Long posts: weekly fetch requests X `note_tweet` so full text is stored (without it, API `text` is truncated ~280 chars). Very long text is shown collapsed to 8 lines with a More/Less control.
-- Settings page at `/settings`: list tracked accounts with remove actions; shows active account count and total API cost for the current calendar month (UTC, sum of `api_calls.cost_usd`). Linked from a Settings button in the site header (left of Sign out).
+- Settings page at `/settings`: list tracked accounts with remove actions; shows active account count and total API cost for the current calendar month (UTC, sum of `api_calls.cost_usd`). Linked from a Settings button in the site header (left of Sign out). On `/settings` that control switches to Home (links to `/`); on other pages it is Settings again.
 - Account lists (homepage carousel and settings) sort by handle case-insensitively (`ORDER BY handle COLLATE NOCASE`) so mixed-case handles do not sort ahead of lowercase ones.
 - Favicon: classical serif capital **Y** on cream (`/static/favicon.svg` + PNG fallback), linked from the base template.
 - Carousel navigation: mouse wheel over card chrome or gaps scrolls horizontally between cards; wheel over the newsletter body scrolls vertically inside that card. Left/right arrow keys move between cards; up/down arrow keys scroll inside the centered card. Card bodies and the carousel hide scrollbars.

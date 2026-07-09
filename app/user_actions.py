@@ -14,6 +14,8 @@ LIKE_JITTER_SECONDS = 20
 
 _drain_lock = threading.Lock()
 _drain_running = False
+_maint_lock = threading.Lock()
+_maint_running = False
 
 class UserActionsClient:
   def __init__(self, http=None):
@@ -135,3 +137,29 @@ def resume_like_drain_if_needed(db_path):
     if db.like_queue_size(conn) > 0: start_like_drain(db_path)
   finally:
     conn.close()
+
+def run_owner_maintenance(db_path, auth_config=None):
+  """Token refresh (if needed) + pending follow retries. Safe to call from a background thread."""
+  auth_config = auth_config or auth.AuthConfig.from_env()
+  if not auth_config.enabled: return
+  conn = db.connect(db_path)
+  try:
+    access_token, owner_id = auth.get_valid_access_token(conn, auth_config)
+    if access_token and owner_id:
+      retry_pending_follows(conn, access_token, owner_id)
+  finally:
+    conn.close()
+
+def schedule_owner_maintenance(db_path, auth_config=None):
+  """Run owner maintenance in a daemon thread. No-op if a run is already in flight."""
+  global _maint_running
+  with _maint_lock:
+    if _maint_running: return
+    _maint_running = True
+  def worker():
+    global _maint_running
+    try: run_owner_maintenance(db_path, auth_config)
+    finally:
+      with _maint_lock:
+        _maint_running = False
+  threading.Thread(target=worker, daemon=True).start()
