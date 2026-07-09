@@ -89,9 +89,13 @@ def test_settings_shows_month_cost(client):
 def test_home_has_favicon(client):
   r = client.get("/")
   assert 'href="/static/favicon.svg"' in r.text
+  assert 'href="/static/favicon.png"' in r.text
   icon = client.get("/static/favicon.svg")
   assert icon.status_code == 200
   assert "svg" in icon.headers.get("content-type", "")
+  assert ">Y</text>" in icon.text
+  png = client.get("/static/favicon.png")
+  assert png.status_code == 200
 
 def test_home_multiple_accounts_shows_carousel_and_add_card(client):
   client.post("/accounts", data={"handle": "alice"})

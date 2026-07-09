@@ -1,4 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Mentally Stable X Experience">
-  <rect width="32" height="32" rx="8" fill="#2f5d62"/>
-  <path d="M9 16.5 L13.5 21 L23 11" fill="none" stroke="#f7f5f0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Cream field + classical serif Y (same vibe as the soft serif X concept). -->
+  <rect width="32" height="32" fill="#e8e6d7"/>
+  <text
+    x="16" y="22.5"
+    text-anchor="middle"
+    font-family="Georgia, 'Palatino Linotype', Palatino, 'Times New Roman', Times, serif"
+    font-size="22"
+    fill="#143a43">Y</text>
 </svg>
