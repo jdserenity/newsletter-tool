@@ -65,8 +65,13 @@ def test_settings_page_lists_accounts_and_remove(client):
   assert "2" in r.text and "tracked account" in r.text
   assert "API cost this month" in r.text
   c = db.connect(client.db_path)
-  aid = db.get_account(c, handle="alice")["id"]
-  r = client.post(f"/accounts/{aid}/remove", follow_redirects=True)
+  aid_alice = db.get_account(c, handle="alice")["id"]
+  aid_bob = db.get_account(c, handle="bob")["id"]
+  assert r.text.count('class="rss-link"') == 2
+  assert f'href="/feeds/{aid_alice}.xml"' in r.text
+  assert f'href="/feeds/{aid_bob}.xml"' in r.text
+  assert 'target="_blank"' in r.text and 'rel="noopener noreferrer"' in r.text
+  r = client.post(f"/accounts/{aid_alice}/remove", follow_redirects=True)
   assert "@alice" not in r.text
   assert "@bob" in r.text
 
