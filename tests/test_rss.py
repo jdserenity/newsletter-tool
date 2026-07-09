@@ -1,3 +1,5 @@
+from xml.etree import ElementTree as ET
+
 from app import db
 from app.rss import item_description_html, newsletter_feed, rfc822_pub_date
 
@@ -37,3 +39,25 @@ def test_newsletter_feed_has_valid_pubdate_and_self_link(conn):
   assert f"https://news.example.com/feeds/{aid}.xml" in feed
   # raw SQLite form must not appear as pubDate
   assert "<pubDate>20" not in feed or " +0000" in feed
+
+def test_newsletter_feed_is_valid_xml_with_html_and_multiple_items(conn):
+  # Readers report "feed not found" when the document is not well-formed XML.
+  # Multi-item editions inject <br>/<img> into <description>; that must stay valid XML.
+  aid = db.add_account(conn, "alice")
+  items = [
+    {"text": "first & <tagged>", "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/a.jpg?name=medium&format=jpg", "alt": "a"}]},
+    {"text": "second", "media": [], "quoted": {"handle": "bob", "text": "quote ]]> end", "media": []}},
+  ]
+  db.save_edition(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.01)
+  feed = newsletter_feed(db.get_account(conn, account_id=aid), db.list_editions(conn, aid), "https://news.example.com")
+  root = ET.fromstring(feed)  # must not raise
+  assert root.tag == "rss"
+  desc = root.find("./channel/item/description")
+  assert desc is not None and desc.text
+  # HTML text is entity-escaped inside the description; tags remain as real HTML for readers.
+  assert "first &amp; &lt;tagged&gt;" in desc.text
+  assert '<img src="https://pbs.twimg.com/media/a.jpg?name=medium&amp;format=jpg"' in desc.text
+  assert "<br><br>second" in desc.text
+  assert "@bob:" in desc.text
+  # > is HTML-escaped in item text, so ]]> never appears raw inside CDATA from tweet bodies.
+  assert "quote ]]&gt; end" in desc.text
