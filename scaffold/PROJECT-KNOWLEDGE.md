@@ -2,6 +2,9 @@
 
 Hard-won lessons and traps. Product/system facts live only in `scaffold/ARCH-LLM.md` / `scaffold/ARCH-HUMAN.md` — do not restate them here.
 
+## iOS home-screen icon ignores the tab favicon
+Safari “Add to Home Screen” does **not** use `<link rel="icon">`. Without `<link rel="apple-touch-icon" href="…">` (PNG, typically 180×180) it falls back to a screenshot of the page. Ship the same art as the favicon there, plus optional `site.webmanifest` icons for Android/desktop install. Prefer opaque PNG (no transparency) so iOS does not invent a black background.
+
 ## DB path: old in-repo location
 Default is outside the checkout (`~/.local/share/newsletter-tool/newsletter.db`) so worktrees share data. If you still have `data/newsletter.db` inside a repo folder, move it once:
 
