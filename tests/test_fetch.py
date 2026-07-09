@@ -53,6 +53,7 @@ def test_settings_gate_api_params():
   assert "referenced_tweets.id.author_id" in params["expansions"]
   assert params["user.fields"] == "username"
   assert "attachments" in params["tweet.fields"]
+  assert "note_tweet" in params["tweet.fields"]
   assert "url" in params["media.fields"]
   client.get_user_tweets("111", "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z",
                          include_replies=True, include_retweets=True)

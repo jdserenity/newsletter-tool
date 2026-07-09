@@ -8,7 +8,8 @@ COST_PER_POST_READ = 0.005
 COST_PER_USER_READ = 0.010
 COST_PER_COUNTS_ALL = 0.010
 
-TWEET_FIELDS = "created_at,referenced_tweets,entities,public_metrics,attachments,author_id"
+# note_tweet carries full text for long posts; without it, X truncates `text` (~280 chars).
+TWEET_FIELDS = "created_at,referenced_tweets,entities,public_metrics,attachments,author_id,note_tweet"
 MEDIA_FIELDS = "url,preview_image_url,type,alt_text,width,height"
 USER_FIELDS = "username"
 EXPANSIONS = "attachments.media_keys,referenced_tweets.id,referenced_tweets.id.attachments.media_keys,referenced_tweets.id.author_id"

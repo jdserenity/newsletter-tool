@@ -28,6 +28,19 @@ def _is_quote_tco(url_entity, raw):
   exp = url_entity.get("expanded_url") or ""
   return qid in exp
 
+def full_tweet_text(raw, stored_text=None):
+  """Prefer note_tweet full text (long posts); otherwise stored/API text (often truncated)."""
+  note = raw.get("note_tweet") or {}
+  return note.get("text") or stored_text or raw.get("text") or ""
+
+def _clean_source(raw):
+  """Use note_tweet entities when cleaning full long-post text (indices match that text)."""
+  note = raw.get("note_tweet") or {}
+  if not note.get("text"): return raw
+  entities = note.get("entities")
+  if entities is None: return raw
+  return {**raw, "entities": entities}
+
 def clean_tweet_text(text, raw):
   """Remove t.co short links replaced by inline media or quoted blocks."""
   entities = raw.get("entities") or {}
@@ -73,11 +86,19 @@ def quoted_for_display(raw):
   if not qt: return None
   handle = qt.get("author_handle"); tid = qt["id"]
   url = _status_url(handle, tid)
+  src = _clean_source(qt)
   out = {
-    "tweet_id": tid, "text": clean_tweet_text(qt.get("text") or "", qt),
+    "tweet_id": tid, "text": clean_tweet_text(full_tweet_text(qt), src),
     "url": url, "media": media_for_display(qt, url)}
   if handle: out["handle"] = handle
   return out
+
+def order_entries_unread_first(items, read_ids):
+  """Unread tweets first (chrono), then read tweets (chrono) at the bottom."""
+  read_ids = set(read_ids or [])
+  unread = [i for i in items if i.get("tweet_id") not in read_ids]
+  read = [i for i in items if i.get("tweet_id") in read_ids]
+  return unread + read
 
 def build_newsletter(tweets, account):
   """Filter stored tweets by the account's settings and shape them for rendering.
@@ -92,9 +113,10 @@ def build_newsletter(tweets, account):
     raw = json.loads(t["raw_json"]) if isinstance(t.get("raw_json"), str) else t.get("raw_json", {})
     metrics = raw.get("public_metrics", {})
     status_url = f"https://x.com/{account['handle']}/status/{t['tweet_id']}"
+    src = _clean_source(raw)
     item = {
       "tweet_id": t["tweet_id"], "kind": kind,
-      "text": clean_tweet_text(t["text"], raw), "created_at": t["created_at"],
+      "text": clean_tweet_text(full_tweet_text(raw, t.get("text")), src), "created_at": t["created_at"],
       "url": status_url,
       "likes": metrics.get("like_count", 0), "reposts": metrics.get("retweet_count", 0),
       "media": media_for_display(raw, status_url)}
