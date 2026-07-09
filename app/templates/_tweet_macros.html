@@ -23,7 +23,10 @@
   <div class="quoted-label muted">
     quoted{% if quoted.handle %} · <a href="{{ quoted.url }}" target="_blank" rel="noopener noreferrer">@{{ quoted.handle }}</a>{% endif %}
   </div>
-  <div class="tweet-text"><span class="text-content">{{ quoted.text }}</span></div>
+  <div class="tweet-text">
+    <span class="text-content">{{ quoted.text }}</span>
+    <button type="button" class="tweet-more" hidden>More</button>
+  </div>
   {{ tweet_media(quoted.media, quoted.url) }}
 </div>
 {% endif %}

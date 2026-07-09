@@ -101,6 +101,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
 
   def newsletter_cards(c):
     from app.fetch.runner import week_bounds
+    from app.newsletter import order_entries_unread_first
     current_week_start, _ = week_bounds()
     cards = []
     for a in db.list_accounts(c):
@@ -111,6 +112,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       items = json.loads(edition["content_json"]) if edition else []
       tweet_ids = [i["tweet_id"] for i in items if i.get("tweet_id")]
       read_ids = db.read_tweet_ids(c, tweet_ids)
+      items = order_entries_unread_first(items, read_ids)
       cards.append({
         "account": a, "edition": edition, "entries": items,
         "week_start": week_start, "read_tweet_ids": read_ids})
@@ -166,35 +168,47 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     return RedirectResponse("/", status_code=303)
 
   @app.post("/accounts/{account_id}/settings")
-  def save_settings(account_id: int, include_quotes: bool = Form(False),
+  def save_settings(request: Request, account_id: int, include_quotes: bool = Form(False),
                     include_replies: bool = Form(False), include_retweets: bool = Form(False)):
+    # JSON for in-place UI (no page reload — reload was resetting carousel scroll to the left).
+    if not db.get_account(conn(), account_id=account_id): raise HTTPException(404)
     db.update_settings(conn(), account_id, include_quotes=include_quotes,
                        include_replies=include_replies, include_retweets=include_retweets)
+    if "application/json" in request.headers.get("accept", ""):
+      return JSONResponse({"ok": True, "account_id": account_id,
+        "include_quotes": include_quotes, "include_replies": include_replies,
+        "include_retweets": include_retweets})
     return RedirectResponse("/", status_code=303)
 
   @app.post("/tweets/{tweet_id}/read")
-  def set_tweet_read(tweet_id: str, read: bool = Form(False)):
+  def set_tweet_read(request: Request, tweet_id: str, read: bool = Form(False)):
     c = conn()
     if read: db.mark_tweet_read(c, tweet_id)
     else: db.mark_tweet_unread(c, tweet_id)
+    if "application/json" in request.headers.get("accept", ""):
+      return JSONResponse({"ok": True, "tweet_id": tweet_id, "read": read})
     return RedirectResponse("/", status_code=303)
 
   @app.post("/accounts/{account_id}/read-newsletter")
-  def set_newsletter_read(account_id: int, week_start: str = Form(...)):
+  def set_newsletter_read(request: Request, account_id: int, week_start: str = Form(...)):
     c = conn()
     if not db.get_account(c, account_id=account_id): raise HTTPException(404)
     if not week_start.strip(): raise HTTPException(400, "week_start required")
     db.mark_newsletter_read(c, account_id, week_start.strip())
+    if "application/json" in request.headers.get("accept", ""):
+      return JSONResponse({"ok": True, "account_id": account_id, "week_start": week_start.strip()})
     return RedirectResponse("/", status_code=303)
 
   @app.get("/editions/{edition_id}", response_class=HTMLResponse)
   def edition_page(request: Request, edition_id: int):
+    from app.newsletter import order_entries_unread_first
     c = conn()
     edition = db.get_edition(c, edition_id)
     if not edition: raise HTTPException(404)
     items = json.loads(edition["content_json"])
     tweet_ids = [i["tweet_id"] for i in items if i.get("tweet_id")]
     read_ids = db.read_tweet_ids(c, tweet_ids)
+    items = order_entries_unread_first(items, read_ids)
     return render(request, "edition.html", {
       "edition": edition, "items": items, "read_tweet_ids": read_ids})
 

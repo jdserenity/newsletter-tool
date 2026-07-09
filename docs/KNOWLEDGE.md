@@ -23,6 +23,12 @@ Media URLs come from the X API `attachments.media_keys` expansion (no extra post
 ## Terminology
 The product name in the UI is **Mentally Stable X Experience**. Never use the word "digest" in code, templates, or docs. Weekly snapshots live in the `editions` table. The old `digests` table is renamed automatically on connect.
 
+## Carousel jumps left after toggles / mark-read
+Root cause was not scroll math: forms used `method=post` + `RedirectResponse("/")`, so the browser loaded a fresh homepage at `scrollLeft = 0`. Fix is in-place `fetch` with `Accept: application/json` (see `app/static/home.js`), not “save/restore scroll position.”
+
+## Truncated tweet text
+X API v2 returns a short `text` field unless `tweet.fields` includes `note_tweet` (full body for long posts). After enabling that, re-run `news-manual-fetch` (or wait for the weekly job) so stored `raw_json` / editions pick up full text. Old rows without `note_tweet` stay truncated until refetched.
+
 `week_bounds()` in `app/fetch/runner.py` uses the most recent complete Monday-to-Monday window in UTC.
 
 ## Tests

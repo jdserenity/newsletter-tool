@@ -8,27 +8,33 @@
   built {{ edition.built_at }}</span>
 </div>
 
+<div class="tweet-list">
 {% for item in items %}
 {% set is_read = item.tweet_id in read_tweet_ids %}
-<div class="tweet{% if is_read %} tweet-read{% endif %}">
-  <div class="tweet-text"><span class="text-content">{{ item.text }}</span></div>
+<div class="tweet{% if is_read %} tweet-read{% endif %}" data-tweet-id="{{ item.tweet_id }}" data-created-at="{{ item.created_at }}">
+  <div class="tweet-text">
+    <span class="text-content">{{ item.text }}</span>
+    <button type="button" class="tweet-more" hidden>More</button>
+  </div>
   {{ tweet_media(item.media, item.url) }}
   {{ quoted_block(item.quoted) }}
   <div class="meta">
-    <span class="pill">{{ item.kind }}</span>
-    {{ item.created_at[:16].replace("T", " · ") }} ·
-    {{ item.likes }} likes · {{ item.reposts }} reposts ·
-    <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">view on X</a>
-    <form class="tweet-read-form" method="post" action="/tweets/{{ item.tweet_id }}/read">
-      <input type="hidden" name="read" value="{{ 'false' if is_read else 'true' }}">
-      <label class="tweet-read-label">
-        <input type="checkbox" {% if is_read %}checked{% endif %} onchange="this.form.submit()">
-        I read this
-      </label>
-    </form>
+    <span class="meta-bits">
+      <span class="pill">{{ item.kind }}</span>
+      {{ item.created_at[:16].replace("T", " · ") }} ·
+      {{ item.likes }} likes · {{ item.reposts }} reposts ·
+      <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">view on X</a>
+    </span>
+    <button type="button" class="mark-check{% if is_read %} is-read{% endif %}"
+      data-tweet-id="{{ item.tweet_id }}"
+      aria-pressed="{{ 'true' if is_read else 'false' }}"
+      aria-label="{{ 'Mark as unread' if is_read else 'Mark as read' }}"
+      title="{{ 'Mark as unread' if is_read else 'Mark as read' }}"></button>
   </div>
 </div>
 {% else %}
 <p class="muted">Nothing this week.</p>
 {% endfor %}
+</div>
+<script src="/static/home.js"></script>
 {% endblock %}

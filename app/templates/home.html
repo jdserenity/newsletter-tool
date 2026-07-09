@@ -21,17 +21,17 @@
       <form class="settings-row" method="post" action="/accounts/{{ a.id }}/settings">
         <label class="toggle">
           <span class="toggle-label">Quotes</span>
-          <input type="checkbox" name="include_quotes" value="true" {% if a.include_quotes %}checked{% endif %} onchange="this.form.submit()">
+          <input type="checkbox" name="include_quotes" value="true" {% if a.include_quotes %}checked{% endif %}>
           <span class="toggle-rail"><span class="toggle-thumb"></span></span>
         </label>
         <label class="toggle">
           <span class="toggle-label">Replies</span>
-          <input type="checkbox" name="include_replies" value="true" {% if a.include_replies %}checked{% endif %} onchange="this.form.submit()">
+          <input type="checkbox" name="include_replies" value="true" {% if a.include_replies %}checked{% endif %}>
           <span class="toggle-rail"><span class="toggle-thumb"></span></span>
         </label>
         <label class="toggle">
           <span class="toggle-label">Retweets</span>
-          <input type="checkbox" name="include_retweets" value="true" {% if a.include_retweets %}checked{% endif %} onchange="this.form.submit()">
+          <input type="checkbox" name="include_retweets" value="true" {% if a.include_retweets %}checked{% endif %}>
           <span class="toggle-rail"><span class="toggle-thumb"></span></span>
         </label>
       </form>
@@ -39,37 +39,41 @@
     <div class="newsletter-body">
       {% if e %}
       <div class="week-label muted"><span class="text-content">Week of {{ e.week_start[:10] }} · {{ e.item_count }} items · ${{ "%.2f"|format(e.cost_usd) }}</span></div>
+      <div class="tweet-list">
       {% for item in card.entries %}
       {% set is_read = item.tweet_id in card.read_tweet_ids %}
-      <div class="tweet{% if is_read %} tweet-read{% endif %}">
-        <div class="tweet-text"><span class="text-content">{{ item.text }}</span></div>
+      <div class="tweet{% if is_read %} tweet-read{% endif %}" data-tweet-id="{{ item.tweet_id }}" data-created-at="{{ item.created_at }}">
+        <div class="tweet-text">
+          <span class="text-content">{{ item.text }}</span>
+          <button type="button" class="tweet-more" hidden>More</button>
+        </div>
         {{ tweet_media(item.media, item.url) }}
         {{ quoted_block(item.quoted) }}
         <div class="meta">
-          <span class="pill">{{ item.kind }}</span>
-          {{ item.created_at[:16].replace("T", " · ") }} ·
-          {{ item.likes }} likes · {{ item.reposts }} reposts ·
-          <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">view on X</a>
-          <form class="tweet-read-form" method="post" action="/tweets/{{ item.tweet_id }}/read">
-            <input type="hidden" name="read" value="{{ 'false' if is_read else 'true' }}">
-            <label class="tweet-read-label">
-              <input type="checkbox" {% if is_read %}checked{% endif %} onchange="this.form.submit()">
-              I read this
-            </label>
-          </form>
+          <span class="meta-bits">
+            <span class="pill">{{ item.kind }}</span>
+            {{ item.created_at[:16].replace("T", " · ") }} ·
+            {{ item.likes }} likes · {{ item.reposts }} reposts ·
+            <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">view on X</a>
+          </span>
+          <button type="button" class="mark-check{% if is_read %} is-read{% endif %}"
+            data-tweet-id="{{ item.tweet_id }}"
+            aria-pressed="{{ 'true' if is_read else 'false' }}"
+            aria-label="{{ 'Mark as unread' if is_read else 'Mark as read' }}"
+            title="{{ 'Mark as unread' if is_read else 'Mark as read' }}"></button>
         </div>
       </div>
       {% else %}
       <p class="muted">Nothing this week.</p>
       {% endfor %}
+      </div>
       {% else %}
       <p class="muted">No newsletter yet. Builds weekly, or run a fetch manually.</p>
       {% endif %}
       <div class="newsletter-footer">
-        <form class="newsletter-read-form" method="post" action="/accounts/{{ a.id }}/read-newsletter">
-          <input type="hidden" name="week_start" value="{{ card.week_start }}">
-          <button class="newsletter-read-btn" type="submit">I read this newsletter</button>
-        </form>
+        <button type="button" class="mark-check mark-check-lg mark-check-newsletter"
+          data-account-id="{{ a.id }}" data-week-start="{{ card.week_start }}"
+          aria-label="Mark newsletter as read" title="Mark newsletter as read"></button>
       </div>
     </div>
   </article>
@@ -89,6 +93,7 @@
   </article>
 </div>
 <script src="/static/carousel.js"></script>
+<script src="/static/home.js"></script>
 <script>
 (function() {
   var input = document.getElementById('handle-input');

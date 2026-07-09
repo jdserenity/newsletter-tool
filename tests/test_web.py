@@ -214,48 +214,89 @@ def test_view_on_x_opens_in_new_tab(client):
   assert 'target="_blank"' in r.text
   assert 'rel="noopener noreferrer"' in r.text
 
-def test_mark_tweet_read_persists_and_shows_checked(client):
+def test_mark_tweet_read_json_no_redirect(client):
   _seed_edition(client.db_path)
-  r = client.post("/tweets/1/read", data={"read": "true"}, follow_redirects=True)
+  r = client.post("/tweets/1/read", data={"read": "true"},
+                  headers={"Accept": "application/json"})
   assert r.status_code == 200
-  assert "hello world" in r.text
-  assert 'class="tweet tweet-read"' in r.text
-  assert "I read this" in r.text
-  assert 'name="read" value="false"' in r.text
-  c = db.connect(client.db_path)
-  assert db.is_tweet_read(c, "1")
+  assert r.json() == {"ok": True, "tweet_id": "1", "read": True}
+  assert db.is_tweet_read(db.connect(client.db_path), "1")
+  home = client.get("/")
+  assert 'class="tweet tweet-read"' in home.text
+  assert "mark-check is-read" in home.text
+  assert "I read this" not in home.text
 
-def test_unmark_tweet_read(client):
+def test_unmark_tweet_read_json(client):
   _seed_edition(client.db_path)
-  client.post("/tweets/1/read", data={"read": "true"})
-  r = client.post("/tweets/1/read", data={"read": "false"}, follow_redirects=True)
-  assert 'class="tweet tweet-read"' not in r.text
-  assert 'class="tweet"' in r.text
+  client.post("/tweets/1/read", data={"read": "true"}, headers={"Accept": "application/json"})
+  r = client.post("/tweets/1/read", data={"read": "false"},
+                  headers={"Accept": "application/json"})
+  assert r.json()["read"] is False
   assert not db.is_tweet_read(db.connect(client.db_path), "1")
+  home = client.get("/")
+  assert 'class="tweet tweet-read"' not in home.text
 
-def test_mark_newsletter_read_hides_card(client):
+def test_mark_newsletter_read_json_hides_on_next_load(client):
   aid = _seed_edition(client.db_path)
   r = client.get("/")
   assert "hello world" in r.text
-  assert "I read this newsletter" in r.text
+  assert "mark-check-newsletter" in r.text
+  assert "I read this newsletter" not in r.text
   r = client.post(f"/accounts/{aid}/read-newsletter",
-                  data={"week_start": "2026-06-29T00:00:00Z"}, follow_redirects=True)
+                  data={"week_start": "2026-06-29T00:00:00Z"},
+                  headers={"Accept": "application/json"})
   assert r.status_code == 200
-  assert "hello world" not in r.text
-  assert 'href="https://x.com/alice"' not in r.text
-  assert "Add account" in r.text
+  assert r.json()["ok"] is True
+  home = client.get("/")
+  assert "hello world" not in home.text
+  assert 'href="https://x.com/alice"' not in home.text
+  assert "Add account" in home.text
 
-def test_empty_newsletter_still_has_read_newsletter_button(client):
+def test_empty_newsletter_still_has_read_checkmark(client):
   c = db.connect(client.db_path)
   aid = db.add_account(c, "quiet")
   db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", [], 0.0)
   r = client.get("/")
   assert "Nothing this week." in r.text
-  assert "I read this newsletter" in r.text
-  assert f'action="/accounts/{aid}/read-newsletter"' in r.text
+  assert "mark-check-newsletter" in r.text
+  assert f'data-account-id="{aid}"' in r.text
 
-def test_account_without_edition_still_has_read_newsletter_button(client):
+def test_account_without_edition_still_has_read_checkmark(client):
   client.post("/accounts", data={"handle": "pending"})
   r = client.get("/")
   assert "No newsletter yet" in r.text
-  assert "I read this newsletter" in r.text
+  assert "mark-check-newsletter" in r.text
+
+def test_settings_json_does_not_redirect(client):
+  client.post("/accounts", data={"handle": "alice"})
+  c = db.connect(client.db_path)
+  aid = db.get_account(c, handle="alice")["id"]
+  r = client.post(f"/accounts/{aid}/settings", data={"include_retweets": "true"},
+                  headers={"Accept": "application/json"})
+  assert r.status_code == 200
+  assert r.json()["ok"] is True
+  assert r.json()["include_retweets"] is True
+  a = db.get_account(db.connect(client.db_path), account_id=aid)
+  assert a["include_retweets"] == 1
+
+def test_home_read_tweets_sorted_to_bottom(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [
+    {"tweet_id": "1", "kind": "post", "text": "first", "created_at": "2026-06-30T10:00:00Z",
+     "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0},
+    {"tweet_id": "2", "kind": "post", "text": "second", "created_at": "2026-06-30T11:00:00Z",
+     "url": "https://x.com/alice/status/2", "likes": 0, "reposts": 0},
+    {"tweet_id": "3", "kind": "post", "text": "third", "created_at": "2026-06-30T12:00:00Z",
+     "url": "https://x.com/alice/status/3", "likes": 0, "reposts": 0},
+  ]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.01)
+  db.mark_tweet_read(c, "2")
+  r = client.get("/")
+  i1, i2, i3 = r.text.find("first"), r.text.find("second"), r.text.find("third")
+  assert i1 < i3 < i2  # unread chrono first, then read at bottom
+
+def test_home_loads_home_js_for_in_place_actions(client):
+  r = client.get("/")
+  assert 'src="/static/home.js"' in r.text
+  assert "onchange=" not in r.text or "this.form.submit()" not in r.text

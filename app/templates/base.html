@@ -64,20 +64,38 @@
   .tweet.tweet-read { opacity: 0.55; }
   /* Inline (not block) so the text cursor only covers actual characters, not the
      full-width empty space around them — that empty space keeps the grab cursor. */
-  .text-content { cursor: text; }
-  .tweet .meta { color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem; }
-  .tweet-read-form { display: inline; margin-left: 0.35rem; }
-  .tweet-read-label {
-    display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer;
-    font-size: 0.8rem; color: var(--muted); white-space: nowrap;
+  .text-content { cursor: text; white-space: pre-wrap; word-wrap: break-word; }
+  .tweet-text.is-clamped .text-content {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 8; overflow: hidden;
   }
-  .tweet-read-label input { cursor: pointer; }
+  .tweet-more {
+    display: none; margin-top: 0.25rem; padding: 0; border: none; background: none;
+    color: var(--accent); font-size: 0.8rem; cursor: pointer;
+  }
+  .tweet-text.is-clamped .tweet-more, .tweet-text.is-expanded .tweet-more { display: inline-block; }
+  .tweet .meta {
+    color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem;
+  }
+  .tweet .meta-bits { flex: 1 1 auto; min-width: 0; }
+  .mark-check {
+    flex: 0 0 auto; width: 1.35rem; height: 1.35rem; padding: 0; margin: 0;
+    border: 1px solid var(--border); border-radius: 50%; background: transparent;
+    color: transparent; font-size: 0.72rem; line-height: 1; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .mark-check::before { content: "✓"; }
+  .mark-check:hover { border-color: var(--accent); color: var(--accent-soft); }
+  .mark-check.is-read {
+    border-color: var(--accent); background: var(--accent); color: #fff;
+  }
   .newsletter-footer {
     margin-top: 1.25rem; padding-top: 0.9rem; border-top: 1px solid var(--border);
+    display: flex; justify-content: center;
   }
-  .newsletter-read-form { margin: 0; }
-  .newsletter-read-btn { width: 100%; background: transparent; color: var(--accent); border: 1px solid var(--accent); }
-  .newsletter-read-btn:hover { background: var(--accent-soft); }
+  .mark-check.mark-check-lg {
+    width: 1.75rem; height: 1.75rem; font-size: 0.9rem;
+  }
   .tweet-media { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; }
   .media-thumb { position: relative; display: block; line-height: 0; }
   .tweet-media img {
