@@ -127,7 +127,13 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
 
   @app.get("/settings", response_class=HTMLResponse)
   def settings_page(request: Request):
-    return render(request, "settings.html", {"accounts": db.list_accounts(conn())})
+    c = conn()
+    accounts = db.list_accounts(c)
+    return render(request, "settings.html", {
+      "accounts": accounts,
+      "account_count": len(accounts),
+      "month_cost_usd": db.total_api_cost(c, since=db.month_start_utc()),
+    })
 
   @app.post("/accounts")
   def add_account(request: Request, handle: str = Form(...)):

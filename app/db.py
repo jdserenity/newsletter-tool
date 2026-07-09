@@ -138,7 +138,8 @@ def remove_account(conn, account_id):
   conn.execute("UPDATE accounts SET active = 0 WHERE id = ?", (account_id,)); conn.commit()
 
 def list_accounts(conn, active_only=True):
-  q = "SELECT * FROM accounts" + (" WHERE active = 1" if active_only else "") + " ORDER BY handle"
+  # COLLATE NOCASE: SQLite default sort is ASCII so "Ruxandra" would sort before "alice".
+  q = "SELECT * FROM accounts" + (" WHERE active = 1" if active_only else "") + " ORDER BY handle COLLATE NOCASE"
   return [dict(r) for r in conn.execute(q).fetchall()]
 
 def get_account(conn, account_id=None, handle=None):
@@ -161,7 +162,7 @@ def mark_account_followed(conn, account_id):
 
 def accounts_pending_follow(conn):
   return [dict(r) for r in conn.execute(
-    "SELECT * FROM accounts WHERE active = 1 AND followed_at IS NULL ORDER BY handle").fetchall()]
+    "SELECT * FROM accounts WHERE active = 1 AND followed_at IS NULL ORDER BY handle COLLATE NOCASE").fetchall()]
 
 def pending_follow_count(conn):
   return conn.execute(
@@ -233,6 +234,16 @@ def cost_for_account(conn, account_id, since=None):
   q = "SELECT COALESCE(SUM(cost_usd), 0) AS c FROM api_calls WHERE account_id = ?"; params = [account_id]
   if since: q += " AND called_at >= ?"; params.append(since)
   return conn.execute(q, params).fetchone()["c"]
+
+def total_api_cost(conn, since=None):
+  """Sum of recorded api_calls.cost_usd, optionally since a timestamp (UTC SQLite datetime)."""
+  q = "SELECT COALESCE(SUM(cost_usd), 0) AS c FROM api_calls"; params = []
+  if since: q += " WHERE called_at >= ?"; params.append(since)
+  return conn.execute(q, params).fetchone()["c"]
+
+def month_start_utc(now=None):
+  now = now or datetime.now(timezone.utc)
+  return now.strftime("%Y-%m-01 00:00:00")
 
 # --- editions (weekly newsletter snapshots) ---
 

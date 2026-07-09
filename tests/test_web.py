@@ -62,6 +62,8 @@ def test_settings_page_lists_accounts_and_remove(client):
   assert "@alice" in r.text
   assert "@bob" in r.text
   assert r.text.count("/remove") == 2
+  assert "2" in r.text and "tracked account" in r.text
+  assert "API cost this month" in r.text
   c = db.connect(client.db_path)
   aid = db.get_account(c, handle="alice")["id"]
   r = client.post(f"/accounts/{aid}/remove", follow_redirects=True)
@@ -72,6 +74,24 @@ def test_settings_page_empty(client):
   r = client.get("/settings")
   assert r.status_code == 200
   assert "No tracked accounts yet" in r.text
+  assert "0" in r.text and "tracked account" in r.text
+  assert "$0.00" in r.text
+  assert "API cost this month" in r.text
+
+def test_settings_shows_month_cost(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  db.record_api_call(c, aid, "users/:id/tweets", 10, 1.25)
+  r = client.get("/settings")
+  assert "$1.25" in r.text
+  assert "1" in r.text and "tracked account" in r.text
+
+def test_home_has_favicon(client):
+  r = client.get("/")
+  assert 'href="/static/favicon.svg"' in r.text
+  icon = client.get("/static/favicon.svg")
+  assert icon.status_code == 200
+  assert "svg" in icon.headers.get("content-type", "")
 
 def test_home_multiple_accounts_shows_carousel_and_add_card(client):
   client.post("/accounts", data={"handle": "alice"})

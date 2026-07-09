@@ -19,7 +19,9 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Per-newsletter mark-read control is the same minimal checkmark at the bottom of every account card (including empty weeks and accounts with no edition yet). Stored in `read_newsletters` as `(account_id, week_start)`. That account's card is removed for that week; a later week's edition shows again.
 - Toolbar settings toggles, tweet mark-read, and newsletter mark-read save via `fetch` + JSON (Accept: application/json). They must not full-page POST/redirect — that reloaded `/` and reset the carousel to the leftmost card.
 - Long posts: weekly fetch requests X `note_tweet` so full text is stored (without it, API `text` is truncated ~280 chars). Very long text is shown collapsed to 8 lines with a More/Less control.
-- Settings page at `/settings`: list tracked accounts with remove actions. Linked from a Settings button in the site header (left of Sign out).
+- Settings page at `/settings`: list tracked accounts with remove actions; shows active account count and total API cost for the current calendar month (UTC, sum of `api_calls.cost_usd`). Linked from a Settings button in the site header (left of Sign out).
+- Account lists (homepage carousel and settings) sort by handle case-insensitively (`ORDER BY handle COLLATE NOCASE`) so mixed-case handles do not sort ahead of lowercase ones.
+- Favicon at `/static/favicon.svg` (teal tile with a checkmark), linked from the base template.
 - Carousel navigation: mouse wheel over card chrome or gaps scrolls horizontally between cards; wheel over the newsletter body scrolls vertically inside that card. Left/right arrow keys move between cards; up/down arrow keys scroll inside the centered card. Card bodies and the carousel hide scrollbars.
 - RSS feed structure is not finalized (per-account vs consolidated recap). v1 ships per-account feeds at `/feeds/{id}.xml` as the baseline.
 
