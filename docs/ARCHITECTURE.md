@@ -4,7 +4,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 
 ## Product scope
 - Personal tool that turns selected X (Twitter) users' output into clean, filterable, inbox-friendly weekly newsletters, so the owner can log off X without losing high-value signal.
-- Product name in the UI: **Mentally Stable X Experience**. Do not use the word "digest" anywhere in the codebase.
+- Product name in the UI: **More Mentally Stable X Experience**. Do not use the word "digest" anywhere in the codebase.
 - "Inbox-friendly" does not mean email. Email is out of scope.
 - Single user for now (the owner). May become a sellable product later; no multi-tenant work yet.
 - Accessed via a webpage on the owner's VPS, as a subdomain of the owner's personal domain.

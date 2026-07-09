@@ -26,7 +26,7 @@ def test_home_builds_newsletter_from_stored_tweets_on_load(client):
 def test_home_empty(client):
   r = client.get("/")
   assert r.status_code == 200
-  assert "Mentally Stable X Experience" in r.text
+  assert "More Mentally Stable X Experience" in r.text
   assert "Newsletter Tool" not in r.text
   assert "Add account" in r.text
   assert "Estimate cost" in r.text

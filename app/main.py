@@ -35,7 +35,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     yield
     if scheduler: scheduler.shutdown(wait=False)
 
-  app = FastAPI(title="Mentally Stable X Experience", lifespan=lifespan)
+  app = FastAPI(title="More Mentally Stable X Experience", lifespan=lifespan)
   app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
   app.state.db_path = path
   app.state.auth_config = auth_config
