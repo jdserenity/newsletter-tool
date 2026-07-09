@@ -170,3 +170,26 @@ def test_migrate_digests_table_to_editions(tmp_path):
   conn = db.connect(str(path))
   tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
   assert "editions" in tables; assert "digests" not in tables
+
+def test_mark_tweet_read_and_unread(conn):
+  assert not db.is_tweet_read(conn, "99")
+  db.mark_tweet_read(conn, "99")
+  assert db.is_tweet_read(conn, "99")
+  db.mark_tweet_read(conn, "99")  # idempotent
+  assert db.is_tweet_read(conn, "99")
+  db.mark_tweet_unread(conn, "99")
+  assert not db.is_tweet_read(conn, "99")
+
+def test_read_tweet_ids_returns_set(conn):
+  db.mark_tweet_read(conn, "1"); db.mark_tweet_read(conn, "2")
+  assert db.read_tweet_ids(conn) == {"1", "2"}
+  assert db.read_tweet_ids(conn, ["1", "3"]) == {"1"}
+
+def test_mark_newsletter_read_for_account_week(conn):
+  aid = db.add_account(conn, "alice")
+  assert not db.is_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")
+  db.mark_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")
+  assert db.is_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")
+  assert not db.is_newsletter_read(conn, aid, "2026-07-06T00:00:00Z")
+  db.mark_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")  # idempotent
+  assert db.is_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")
