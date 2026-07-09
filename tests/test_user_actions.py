@@ -177,6 +177,7 @@ def test_resume_like_drain_if_needed_noop_when_queue_empty(tmp_path, monkeypatch
   assert started == []
 
 def test_get_valid_access_token_refreshes_and_persists(conn, monkeypatch):
+  # No expires_at → treat as unknown and refresh once.
   db.save_oauth_session(conn, "99", "old-at", "rt")
   monkeypatch.setattr(auth, "refresh_access_token", lambda http, cid, sec, rt: {
     "access_token": "new-at", "refresh_token": "new-rt", "expires_in": 7200})
@@ -186,3 +187,56 @@ def test_get_valid_access_token_refreshes_and_persists(conn, monkeypatch):
   assert token == "new-at"; assert uid == "99"
   row = db.get_oauth_session(conn)
   assert row["access_token"] == "new-at"; assert row["refresh_token"] == "new-rt"
+  assert row["expires_at"]  # stored so the next call can skip the network
+
+def test_get_valid_access_token_reuses_unexpired_token(conn, monkeypatch):
+  from datetime import datetime, timedelta, timezone
+  exp = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+  db.save_oauth_session(conn, "99", "cached-at", "rt", expires_at=exp)
+  def boom(*a, **k): raise AssertionError("should not refresh while token is still valid")
+  monkeypatch.setattr(auth, "refresh_access_token", boom)
+  cfg = auth.AuthConfig.from_env(enabled=True)
+  cfg.client_id = "cid"; cfg.client_secret = "sec"
+  token, uid = auth.get_valid_access_token(conn, cfg)
+  assert token == "cached-at"; assert uid == "99"
+
+def test_get_valid_access_token_refreshes_when_expired(conn, monkeypatch):
+  from datetime import datetime, timedelta, timezone
+  exp = (datetime.now(timezone.utc) - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+  db.save_oauth_session(conn, "99", "old-at", "rt", expires_at=exp)
+  monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
+    "access_token": "new-at", "refresh_token": "new-rt", "expires_in": 7200})
+  cfg = auth.AuthConfig.from_env(enabled=True)
+  cfg.client_id = "cid"; cfg.client_secret = "sec"
+  token, uid = auth.get_valid_access_token(conn, cfg)
+  assert token == "new-at"; assert uid == "99"
+
+def test_persist_session_oauth_does_not_clobber_existing_db_tokens(conn):
+  from datetime import datetime, timedelta, timezone
+  exp = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+  db.save_oauth_session(conn, "99", "db-at", "db-rt", expires_at=exp)
+  class Req:
+    session = {
+      auth.SESSION_USER_ID: "99", auth.SESSION_ACCESS: "session-at", auth.SESSION_REFRESH: "session-rt",
+    }
+  assert auth.persist_session_oauth(conn, Req()) is False
+  row = db.get_oauth_session(conn)
+  assert row["access_token"] == "db-at"
+  assert row["refresh_token"] == "db-rt"
+  assert row["expires_at"] == exp
+
+def test_run_owner_maintenance_retries_pending_follows(tmp_path, monkeypatch):
+  from datetime import datetime, timedelta, timezone
+  from app.user_actions import run_owner_maintenance
+  path = str(tmp_path / "maint.db")
+  c = db.connect(path)
+  aid = db.add_account(c, "pending"); db.set_account_identity(c, aid, "111", "Pending")
+  exp = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+  db.save_oauth_session(c, "99", "at", "rt", expires_at=exp); c.close()
+  retried = []
+  monkeypatch.setattr("app.user_actions.retry_pending_follows",
+    lambda conn, token, owner_id, **k: retried.append((token, owner_id)) or 1)
+  cfg = auth.AuthConfig.from_env(enabled=True)
+  cfg.client_id = "cid"; cfg.client_secret = "sec"
+  run_owner_maintenance(path, cfg)
+  assert retried == [("at", "99")]

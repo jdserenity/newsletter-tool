@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS oauth_session (
   x_user_id TEXT NOT NULL,
   access_token TEXT NOT NULL,
   refresh_token TEXT,
+  expires_at TEXT,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS liked_tweets (
@@ -102,6 +103,9 @@ def _migrate_schema(conn):
   cols = {r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()}
   if "followed_at" not in cols:
     conn.execute("ALTER TABLE accounts ADD COLUMN followed_at TEXT"); conn.commit()
+  oauth_cols = {r[1] for r in conn.execute("PRAGMA table_info(oauth_session)").fetchall()}
+  if oauth_cols and "expires_at" not in oauth_cols:
+    conn.execute("ALTER TABLE oauth_session ADD COLUMN expires_at TEXT"); conn.commit()
   _repair_inflated_api_call_costs(conn)
 
 def _utc_cutoff(now, hours=24):
@@ -277,14 +281,16 @@ def latest_edition(conn, account_id):
 
 # --- oauth session (single owner) ---
 
-def save_oauth_session(conn, x_user_id, access_token, refresh_token=None):
+def save_oauth_session(conn, x_user_id, access_token, refresh_token=None, expires_at=None):
   conn.execute(
-    """INSERT INTO oauth_session (id, x_user_id, access_token, refresh_token, updated_at) VALUES (1, ?, ?, ?, datetime('now'))
+    """INSERT INTO oauth_session (id, x_user_id, access_token, refresh_token, expires_at, updated_at)
+       VALUES (1, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(id) DO UPDATE SET
          x_user_id = excluded.x_user_id, access_token = excluded.access_token,
          refresh_token = COALESCE(excluded.refresh_token, oauth_session.refresh_token),
+         expires_at = COALESCE(excluded.expires_at, oauth_session.expires_at),
          updated_at = datetime('now')""",
-    (x_user_id, access_token, refresh_token))
+    (x_user_id, access_token, refresh_token, expires_at))
   conn.commit()
 
 def get_oauth_session(conn):

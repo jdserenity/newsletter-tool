@@ -10,7 +10,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - Per-account settings (`include_quotes`, `include_replies`, `include_retweets`) gate **fetch** and also re-filter at newsletter build.
 - Per-account API cost from `api_calls` rows (not log files). Settings page also shows active account count + sum of `api_calls.cost_usd` for current calendar month (UTC).
 - **Estimate cost** (add card): 3× `GET /2/tweets/counts/all` (complete Mon–Mon weeks, oldest→newest) ≈ $0.01 each ≈ $0.03. Project weekly fetch as `avg_tweets × $0.005 + $0.01` user lookup; default new-account filters (replies/retweets excluded at API; quotes always counted). Rejects already-tracked handles. Does **not** write `api_calls`.
-- Homepage: horizontal carousel of account cards (settings toggles, cost, latest newsletter inline). No separate account detail page. On load: `repair_missing_editions` builds missing editions from stored tweets when current week has tweets but no edition (no X API).
+- Homepage: horizontal carousel of account cards (settings toggles, cost, latest newsletter inline). No separate account detail page. On load: `repair_missing_editions` builds missing editions from stored tweets when current week has tweets but no edition (no X API). GET `/` must not block on X network: token refresh + pending follows run via `schedule_owner_maintenance` (background). Access tokens stored with `oauth_session.expires_at`; refresh only near/after expiry.
 - Account lists: `ORDER BY handle COLLATE NOCASE`.
 - Favicon: serif **Y** on cream (`/static/favicon.svg` + PNG).
 
@@ -51,7 +51,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/` | Carousel; repair missing editions; persist OAuth / retry follows / resume likes |
+| GET | `/` | Carousel; repair missing editions (local); resume like drain (local); schedule bg follow/token maintenance |
 | GET | `/settings` | Account list + remove; month cost |
 | POST | `/accounts` | Add handle; owner follow if OAuth |
 | POST | `/accounts/estimate` | JSON cost estimate |
@@ -79,7 +79,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - **App bearer** `X_BEARER_TOKEN`: weekly fetch + estimates (not user session).
 - **User OAuth** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET`. Scopes default: `users.read tweet.read like.write follows.write offline.access` (`X_OAUTH_SCOPES` override).
 - **Fetch:** settings exclude replies/retweets at API when off. Quotes always fetched; filtered in builder if `include_quotes` off. Fields include `note_tweet`, media keys, `referenced_tweets.id` (quoted posts extra post reads). Media on `raw_json`; photos inline; video/GIF thumb → X. Media `t.co` stripped at build. `api_calls.units` = timeline tweets + expanded referenced IDs per page.
-- **Owner actions:** add account → POST follow (no following-list precheck). After edition build → enqueue likes; background drain: first like immediate, then ~60s ±1–20s. Tokens in `oauth_session` (refresh while drain). `liked_tweets` / `like_queue`. Startup resumes non-empty queue. Unfollowed tracked accounts retried on home load + startup when OAuth present.
+- **Owner actions:** add account → POST follow (no following-list precheck). After edition build → enqueue likes; background drain: first like immediate, then ~60s ±1–20s. Tokens in `oauth_session` with `expires_at` (refresh only when needed during drain/maintenance). `liked_tweets` / `like_queue`. Startup resumes non-empty queue. Unfollowed tracked accounts retried in background on home load + on startup when OAuth present.
 - Week window: `week_bounds()` = most recent complete Mon–Mon UTC (`app/fetch/runner.py`).
 
 ## Run / deploy

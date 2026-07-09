@@ -15,7 +15,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from app import auth, db
 from app.fetch.runner import repair_missing_editions
 from app.scheduler import start_scheduler
-from app.user_actions import UserActionsClient, follow_tracked_account, resume_like_drain_if_needed, retry_pending_follows, retry_pending_follows_on_startup
+from app.user_actions import (
+  UserActionsClient, follow_tracked_account, resume_like_drain_if_needed,
+  retry_pending_follows, retry_pending_follows_on_startup, schedule_owner_maintenance,
+)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -51,13 +54,20 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     if auth_config.enabled: ctx["user"] = auth.session_user(request)
     return templates.TemplateResponse(request, name, ctx)
 
-  def after_authenticated_request(c, request: Request):
-    """Persist OAuth, retry pending follows, and resume a stalled like queue."""
+  def after_authenticated_request(c, request: Request, *, defer_network=False):
+    """Local session bootstrap + like-queue resume; optional background follow/token work.
+
+    Home uses defer_network=True so GET / only touches SQLite before rendering.
+    Token refresh and pending follows talk to X and must not block the HTML response.
+    """
     if not auth_config.enabled: return
     auth.persist_session_oauth(c, request)
+    resume_like_drain_if_needed(path)  # local check; drain itself is a background thread
+    if defer_network:
+      schedule_owner_maintenance(path, auth_config)
+      return
     token, owner_id = auth.owner_access_token(c, request, auth_config)
     if token and owner_id: retry_pending_follows(c, token, owner_id)
-    resume_like_drain_if_needed(path)
 
   if auth_config.enabled:
     @app.get("/auth/login", response_class=HTMLResponse)
@@ -89,7 +99,8 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       except Exception as e:
         raise HTTPException(400, f"OAuth token exchange failed: {e}") from e
       auth.store_user_session(request, token, me)
-      db.save_oauth_session(conn(), me["id"], token["access_token"], token.get("refresh_token"))
+      db.save_oauth_session(conn(), me["id"], token["access_token"], token.get("refresh_token"),
+        expires_at=auth.expires_at_from_token(token))
       request.session.pop(auth.SESSION_OAUTH_STATE, None)
       request.session.pop(auth.SESSION_CODE_VERIFIER, None)
       return RedirectResponse("/", status_code=303)
@@ -123,8 +134,8 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   @app.get("/", response_class=HTMLResponse)
   def home(request: Request):
     c = conn()
-    repair_missing_editions(c)
-    after_authenticated_request(c, request)
+    repair_missing_editions(c)  # local only — no X API
+    after_authenticated_request(c, request, defer_network=True)
     return render(request, "home.html", {"cards": newsletter_cards(c)})
 
   @app.get("/settings", response_class=HTMLResponse)
