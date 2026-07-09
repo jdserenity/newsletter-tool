@@ -1,12 +1,21 @@
 {% extends "base.html" %}
 {% block body_class %}page-settings{% endblock %}
-{% block title %}Settings — Newsletter Tool{% endblock %}
+{% block title %}Settings — Mentally Stable X Experience{% endblock %}
 {% block content %}
 <div class="settings-panel">
   <h2>Settings</h2>
-  <p class="muted">Remove tracked accounts you no longer want newsletters for.</p>
-  {% for a in accounts %}
   <div class="card row">
+    <div>
+      <strong>{{ account_count }}</strong>
+      <span class="muted"> tracked account{% if account_count != 1 %}s{% endif %}</span>
+    </div>
+    <div>
+      <strong>${{ "%.2f"|format(month_cost_usd) }}</strong>
+      <span class="muted"> API cost this month</span>
+    </div>
+  </div>
+  <p class="muted">Remove tracked accounts you no longer want newsletters for.</p>
+  {% for a in accounts %}  <div class="card row">
     <div>
       <strong>@{{ a.handle }}</strong>
       {% if a.display_name %}<span class="muted"> — {{ a.display_name }}</span>{% endif %}

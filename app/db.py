@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS like_queue (
   tweet_id TEXT NOT NULL UNIQUE,
   queued_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS read_tweets (
+  tweet_id TEXT NOT NULL PRIMARY KEY,
+  read_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS read_newsletters (
+  account_id INTEGER NOT NULL REFERENCES accounts(id),
+  week_start TEXT NOT NULL,
+  read_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (account_id, week_start)
+);
 """
 
 def connect(db_path=None):
@@ -128,7 +138,8 @@ def remove_account(conn, account_id):
   conn.execute("UPDATE accounts SET active = 0 WHERE id = ?", (account_id,)); conn.commit()
 
 def list_accounts(conn, active_only=True):
-  q = "SELECT * FROM accounts" + (" WHERE active = 1" if active_only else "") + " ORDER BY handle"
+  # COLLATE NOCASE: SQLite default sort is ASCII so "Ruxandra" would sort before "alice".
+  q = "SELECT * FROM accounts" + (" WHERE active = 1" if active_only else "") + " ORDER BY handle COLLATE NOCASE"
   return [dict(r) for r in conn.execute(q).fetchall()]
 
 def get_account(conn, account_id=None, handle=None):
@@ -151,7 +162,7 @@ def mark_account_followed(conn, account_id):
 
 def accounts_pending_follow(conn):
   return [dict(r) for r in conn.execute(
-    "SELECT * FROM accounts WHERE active = 1 AND followed_at IS NULL ORDER BY handle").fetchall()]
+    "SELECT * FROM accounts WHERE active = 1 AND followed_at IS NULL ORDER BY handle COLLATE NOCASE").fetchall()]
 
 def pending_follow_count(conn):
   return conn.execute(
@@ -224,6 +235,16 @@ def cost_for_account(conn, account_id, since=None):
   if since: q += " AND called_at >= ?"; params.append(since)
   return conn.execute(q, params).fetchone()["c"]
 
+def total_api_cost(conn, since=None):
+  """Sum of recorded api_calls.cost_usd, optionally since a timestamp (UTC SQLite datetime)."""
+  q = "SELECT COALESCE(SUM(cost_usd), 0) AS c FROM api_calls"; params = []
+  if since: q += " WHERE called_at >= ?"; params.append(since)
+  return conn.execute(q, params).fetchone()["c"]
+
+def month_start_utc(now=None):
+  now = now or datetime.now(timezone.utc)
+  return now.strftime("%Y-%m-01 00:00:00")
+
 # --- editions (weekly newsletter snapshots) ---
 
 def save_edition(conn, account_id, week_start, week_end, items, cost_usd):
@@ -277,6 +298,40 @@ def is_tweet_liked(conn, tweet_id):
 
 def mark_tweet_liked(conn, tweet_id):
   conn.execute("INSERT OR IGNORE INTO liked_tweets (tweet_id) VALUES (?)", (tweet_id,)); conn.commit()
+
+# --- read tweets (owner marked as read in the UI) ---
+
+def is_tweet_read(conn, tweet_id):
+  return conn.execute("SELECT 1 FROM read_tweets WHERE tweet_id = ?", (tweet_id,)).fetchone() is not None
+
+def mark_tweet_read(conn, tweet_id):
+  conn.execute("INSERT OR IGNORE INTO read_tweets (tweet_id) VALUES (?)", (tweet_id,)); conn.commit()
+
+def mark_tweet_unread(conn, tweet_id):
+  conn.execute("DELETE FROM read_tweets WHERE tweet_id = ?", (tweet_id,)); conn.commit()
+
+def read_tweet_ids(conn, tweet_ids=None):
+  """Return the set of tweet IDs the owner has marked read. Optionally filter to tweet_ids."""
+  if tweet_ids is not None:
+    if not tweet_ids: return set()
+    placeholders = ",".join("?" * len(tweet_ids))
+    rows = conn.execute(
+      f"SELECT tweet_id FROM read_tweets WHERE tweet_id IN ({placeholders})", tuple(tweet_ids)).fetchall()
+  else:
+    rows = conn.execute("SELECT tweet_id FROM read_tweets").fetchall()
+  return {r["tweet_id"] for r in rows}
+
+# --- read newsletters (hide account card for that week) ---
+
+def is_newsletter_read(conn, account_id, week_start):
+  return conn.execute(
+    "SELECT 1 FROM read_newsletters WHERE account_id = ? AND week_start = ?",
+    (account_id, week_start)).fetchone() is not None
+
+def mark_newsletter_read(conn, account_id, week_start):
+  conn.execute(
+    "INSERT OR IGNORE INTO read_newsletters (account_id, week_start) VALUES (?, ?)",
+    (account_id, week_start)); conn.commit()
 
 # --- like queue (background pacing) ---
 

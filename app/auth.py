@@ -148,7 +148,10 @@ def get_valid_access_token(conn, config):
 def http_client(config):
   return config.http or httpx.Client(timeout=30)
 
-PUBLIC_PREFIXES = ("/auth/",)
+# Paths any client may hit without a browser login cookie.
+# /feeds/ must stay public: RSS readers do not send session cookies, so requiring
+# auth made them receive the HTML login page (or a redirect) and report "feed not found".
+PUBLIC_PREFIXES = ("/auth/", "/feeds/", "/static/")
 
 class RequireAuthMiddleware:
   def __init__(self, app, config: AuthConfig):

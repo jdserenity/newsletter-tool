@@ -98,7 +98,7 @@ def test_tweet_text_block_has_no_explicit_cursor(client):
 
 def test_text_content_span_has_text_cursor(client):
   r = client.get("/")
-  assert ".text-content { cursor: text; }" in r.text
+  assert ".text-content { cursor: text;" in r.text
 
 def test_tweet_text_wraps_content_in_text_content_span(client):
   from app import db
@@ -108,7 +108,8 @@ def test_tweet_text_wraps_content_in_text_content_span(client):
             "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0}]
   db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.0)
   r = client.get("/")
-  assert '<div class="tweet-text"><span class="text-content">hello world</span></div>' in r.text
+  assert '<span class="text-content">hello world</span>' in r.text
+  assert 'class="tweet-more"' in r.text
 
 def test_images_are_not_natively_draggable(client):
   from app import db

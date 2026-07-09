@@ -28,6 +28,13 @@ def test_add_and_list_accounts(conn):
   accounts = db.list_accounts(conn)
   assert len(accounts) == 1; assert accounts[0]["handle"] == "alice"  # @ stripped
 
+def test_list_accounts_orders_case_insensitive(conn):
+  db.add_account(conn, "bob")
+  db.add_account(conn, "RuxandraTeslo")
+  db.add_account(conn, "alice")
+  handles = [a["handle"] for a in db.list_accounts(conn)]
+  assert handles == ["alice", "bob", "RuxandraTeslo"]
+
 def test_remove_account_deactivates(conn):
   aid = db.add_account(conn, "alice")
   db.remove_account(conn, aid)
@@ -66,6 +73,14 @@ def test_cost_for_account(conn):
   db.record_api_call(conn, aid, "users/:id/tweets", 10, 0.05)
   db.record_api_call(conn, aid, "users/by/username", 1, 0.01)
   assert abs(db.cost_for_account(conn, aid) - 0.06) < 1e-9
+
+def test_total_api_cost_and_month_start(conn):
+  aid = db.add_account(conn, "alice")
+  db.record_api_call(conn, aid, "users/:id/tweets", 10, 0.05)
+  assert abs(db.total_api_cost(conn) - 0.05) < 1e-9
+  assert abs(db.total_api_cost(conn, since=db.month_start_utc()) - 0.05) < 1e-9
+  assert abs(db.total_api_cost(conn, since="2099-01-01 00:00:00") - 0.0) < 1e-9
+  assert db.month_start_utc().endswith("01 00:00:00")
 
 def test_billable_post_count_skips_recently_fetched_tweets(conn):
   from datetime import datetime, timedelta, timezone
@@ -170,3 +185,26 @@ def test_migrate_digests_table_to_editions(tmp_path):
   conn = db.connect(str(path))
   tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
   assert "editions" in tables; assert "digests" not in tables
+
+def test_mark_tweet_read_and_unread(conn):
+  assert not db.is_tweet_read(conn, "99")
+  db.mark_tweet_read(conn, "99")
+  assert db.is_tweet_read(conn, "99")
+  db.mark_tweet_read(conn, "99")  # idempotent
+  assert db.is_tweet_read(conn, "99")
+  db.mark_tweet_unread(conn, "99")
+  assert not db.is_tweet_read(conn, "99")
+
+def test_read_tweet_ids_returns_set(conn):
+  db.mark_tweet_read(conn, "1"); db.mark_tweet_read(conn, "2")
+  assert db.read_tweet_ids(conn) == {"1", "2"}
+  assert db.read_tweet_ids(conn, ["1", "3"]) == {"1"}
+
+def test_mark_newsletter_read_for_account_week(conn):
+  aid = db.add_account(conn, "alice")
+  assert not db.is_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")
+  db.mark_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")
+  assert db.is_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")
+  assert not db.is_newsletter_read(conn, aid, "2026-07-06T00:00:00Z")
+  db.mark_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")  # idempotent
+  assert db.is_newsletter_read(conn, aid, "2026-06-29T00:00:00Z")

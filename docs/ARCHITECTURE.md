@@ -4,7 +4,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 
 ## Product scope
 - Personal tool that turns selected X (Twitter) users' output into clean, filterable, inbox-friendly weekly newsletters, so the owner can log off X without losing high-value signal.
-- Product name in the UI: **Newsletter Tool**. Do not use the word "digest" anywhere in the codebase.
+- Product name in the UI: **Mentally Stable X Experience**. Do not use the word "digest" anywhere in the codebase.
 - "Inbox-friendly" does not mean email. Email is out of scope.
 - Single user for now (the owner). May become a sellable product later; no multi-tenant work yet.
 - Accessed via a webpage on the owner's VPS, as a subdomain of the owner's personal domain.
@@ -14,9 +14,16 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Per-account visibility into X API cost incurred by that account, computed from rows in the `api_calls` table (no log files).
 - Before adding a new account, **Estimate cost** on the add card calls X `GET /2/tweets/counts/all` three times (one per complete Mon–Mon week, oldest to newest) at ~$0.01/request (~$0.03 total). The app averages those tweet counts and projects weekly fetch cost as `avg_tweets × $0.005 + $0.01` user lookup, using default new-account settings (replies and retweets excluded at the API; quotes always counted). Rejects handles already tracked. Does not write to `api_calls`.
 - Homepage: horizontally scrollable carousel of newsletter cards (one per account). Each card shows settings toggles, API cost, and the latest newsletter inline — no separate account list or detail page. On load, missing newsletters are built from stored tweets when the current week has tweets but no edition row (no X API calls).
-- Settings page at `/settings`: list tracked accounts with remove actions. Linked from a Settings button in the site header (left of Sign out).
+- Links out to X (profile, tweet, quoted author, video media) and the per-account RSS feed open in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`). In-app navigation (home, Settings, sign-in) stays in the same tab.
+- Per-tweet mark-read control is a minimal checkmark (no checkbox, no label). Stores the tweet id in `read_tweets`. Read tweets stay visible, dimmed, and sort to the bottom of that newsletter (unread first, chronological within each group). Click again to unread.
+- Per-newsletter mark-read control is the same minimal checkmark at the bottom of every account card (including empty weeks and accounts with no edition yet). Stored in `read_newsletters` as `(account_id, week_start)`. That account's card is removed for that week; a later week's edition shows again.
+- Toolbar settings toggles, tweet mark-read, and newsletter mark-read save via `fetch` + JSON (Accept: application/json). They must not full-page POST/redirect — that reloaded `/` and reset the carousel to the leftmost card.
+- Long posts: weekly fetch requests X `note_tweet` so full text is stored (without it, API `text` is truncated ~280 chars). Very long text is shown collapsed to 8 lines with a More/Less control.
+- Settings page at `/settings`: list tracked accounts with remove actions; shows active account count and total API cost for the current calendar month (UTC, sum of `api_calls.cost_usd`). Linked from a Settings button in the site header (left of Sign out).
+- Account lists (homepage carousel and settings) sort by handle case-insensitively (`ORDER BY handle COLLATE NOCASE`) so mixed-case handles do not sort ahead of lowercase ones.
+- Favicon: classical serif capital **Y** on cream (`/static/favicon.svg` + PNG fallback), linked from the base template.
 - Carousel navigation: mouse wheel over card chrome or gaps scrolls horizontally between cards; wheel over the newsletter body scrolls vertically inside that card. Left/right arrow keys move between cards; up/down arrow keys scroll inside the centered card. Card bodies and the carousel hide scrollbars.
-- RSS feed structure is not finalized (per-account vs consolidated recap). v1 ships per-account feeds at `/feeds/{id}.xml` as the baseline.
+- RSS: per-account feeds at `/feeds/{id}.xml`. These routes are **public** (no login cookie) so external feed readers can poll them. Web UI routes still require sign-in. Feed items are weekly editions; `<pubDate>` is RFC 822. Anyone who knows a feed URL can read that account’s newsletter content.
 
 ## Tech stack
 - Backend: Python + FastAPI — one app serves web pages, RSS, and the weekly fetch.
@@ -30,7 +37,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Approximate unit costs: $0.005 per post read, $0.010 per user read. Post reads capped at 2M/month.
 - Same resource requested twice within 24 hours is charged once (X deduplication).
 - **App credentials (server):** `X_BEARER_TOKEN` — used by the weekly fetch job and other read-only API calls that act as the app, not as a logged-in user.
-- **User OAuth 2.0 (browser):** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET` — OAuth 2.0 Authorization Code with PKCE. All web routes except `/auth/*` require a signed-in X user session. Scopes at sign-in: `users.read`, `tweet.read`, `like.write`, `follows.write`, `offline.access`. Optional `X_OAUTH_SCOPES` overrides that list. Bearer-token fetch and scheduling do not use the user session.
+- **User OAuth 2.0 (browser):** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET` — OAuth 2.0 Authorization Code with PKCE. Web routes require a signed-in X user session except public prefixes: `/auth/*`, `/feeds/*`, `/static/*`. Scopes at sign-in: `users.read`, `tweet.read`, `like.write`, `follows.write`, `offline.access`. Optional `X_OAUTH_SCOPES` overrides that list. Bearer-token fetch and scheduling do not use the user session.
 - **Owner actions on X:** Adding a tracked account triggers a follow from the signed-in owner account (POST follow; no pre-check of the following list). After each weekly newsletter is built, tweets that made it into the edition are queued and a background thread drains the queue: first like immediately, then ~1 minute ± 1–20s between each until done. OAuth tokens persist in `oauth_session` (refreshed while draining). Already-liked tweet IDs are stored in `liked_tweets`; pending likes live in `like_queue`. On app startup, a non-empty queue resumes draining.
 - **Tweet media:** Weekly fetch requests `attachments.media_keys` and `referenced_tweets.id` expansions (quoted posts bill as extra post reads). Expanded media is stored on each tweet's `raw_json`; quote tweets also store `quoted_tweet` with its media. Newsletter items include `media` and optional `quoted` blocks. Photos render inline via `pbs.twimg.com` URLs; videos and GIFs show a preview thumbnail linking to the tweet on X. Media-related `t.co` short links are stripped from displayed text at build time. Post-read units recorded in `api_calls` count timeline tweets plus any expanded referenced tweets (unique IDs per response page).
 

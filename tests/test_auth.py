@@ -54,6 +54,20 @@ def test_unauthenticated_home_redirects_to_login(auth_client):
   assert r.status_code == 303
   assert r.headers["location"] == "/auth/login"
 
+def test_rss_feed_is_public_without_login(auth_client):
+  # RSS readers have no session cookie — feeds must not redirect to /auth/login.
+  c = db.connect(auth_client.app.state.db_path)
+  aid = db.add_account(c, "alice")
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z",
+    [{"tweet_id": "1", "kind": "post", "text": "hello rss", "created_at": "2026-06-30T10:00:00Z",
+      "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0}], 0.01)
+  r = auth_client.get(f"/feeds/{aid}.xml", follow_redirects=False)
+  assert r.status_code == 200
+  assert "application/rss+xml" in r.headers["content-type"]
+  assert "<rss" in r.text
+  assert "hello rss" in r.text
+  assert "/auth/login" not in r.headers.get("location", "")
+
 def test_login_page_is_public(auth_client):
   r = auth_client.get("/auth/login")
   assert r.status_code == 200

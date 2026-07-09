@@ -1,5 +1,7 @@
 import json
-from app.newsletter import build_newsletter, clean_tweet_text, media_for_display, quoted_for_display
+from app.newsletter import (
+  build_newsletter, clean_tweet_text, full_tweet_text, media_for_display,
+  order_entries_unread_first, quoted_for_display)
 from tests.conftest import make_tweet
 
 ACCOUNT = {"handle": "alice", "include_quotes": 1, "include_replies": 0, "include_retweets": 0}
@@ -110,3 +112,27 @@ def test_build_newsletter_includes_quoted_block():
   assert items[0]["quoted"]["text"] == "bob pic"
   assert items[0]["quoted"]["handle"] == "bob"
   assert len(items[0]["quoted"]["media"]) == 1
+
+def test_full_tweet_text_prefers_note_tweet():
+  raw = {"text": "short… https://t.co/x", "note_tweet": {"text": "This is the full long post body with more than 280 characters of content that X stores in note_tweet."}}
+  assert "full long post" in full_tweet_text(raw, raw["text"])
+  assert full_tweet_text({"text": "only this"}, "only this") == "only this"
+
+def test_build_newsletter_uses_note_tweet_full_text():
+  long = "A" * 400
+  raw = {"id": "7", "text": "A" * 50 + "…", "created_at": "2026-06-30T12:00:00Z",
+         "public_metrics": {"like_count": 0, "retweet_count": 0},
+         "note_tweet": {"text": long}}
+  tweet = {"tweet_id": "7", "kind": "post", "text": raw["text"], "created_at": raw["created_at"],
+           "raw_json": json.dumps(raw)}
+  items = build_newsletter([tweet], ACCOUNT)
+  assert items[0]["text"] == long
+
+def test_order_entries_unread_first():
+  items = [
+    {"tweet_id": "1", "created_at": "2026-06-29T10:00:00Z"},
+    {"tweet_id": "2", "created_at": "2026-06-29T11:00:00Z"},
+    {"tweet_id": "3", "created_at": "2026-06-29T12:00:00Z"},
+  ]
+  ordered = order_entries_unread_first(items, {"2"})
+  assert [i["tweet_id"] for i in ordered] == ["1", "3", "2"]
