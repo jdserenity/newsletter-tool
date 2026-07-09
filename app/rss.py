@@ -34,27 +34,31 @@ def rfc822_pub_date(value):
       continue
   return format_datetime(datetime.now(timezone.utc))
 
+def _cdata(text):
+  """Wrap HTML in CDATA so <br>/<img> stay valid XML. Escape the CDATA terminator if present."""
+  return "<![CDATA[" + text.replace("]]>", "]]]]><![CDATA[>") + "]]>"
+
 def newsletter_feed(account, editions, base_url):
   """One feed per account; each weekly edition is one item linking to its web page."""
   items = []
   for e in editions:
     content = json.loads(e["content_json"])
     blocks = [item_description_html(i) for i in content]
-    desc = "<br><br>".join(blocks) if blocks else escape("No posts this week.")
+    desc = "<br><br>".join(blocks) if blocks else "No posts this week."
     title = escape(f"@{account['handle']} — week of {e['week_start'][:10]}")
     link = f"{base_url}/editions/{e['id']}"
     items.append(
-      f"<item><title>{title}</title><link>{link}</link>"
-      f"<guid isPermaLink=\"true\">{link}</guid>"
+      f"<item><title>{title}</title><link>{escape(link)}</link>"
+      f"<guid isPermaLink=\"true\">{escape(link)}</guid>"
       f"<pubDate>{rfc822_pub_date(e.get('built_at'))}</pubDate>"
-      f"<description>{desc}</description></item>")
+      f"<description>{_cdata(desc)}</description></item>")
   name = escape(account.get("display_name") or account["handle"])
   feed_url = f"{base_url}/feeds/{account['id']}.xml"
   return (
     '<?xml version="1.0" encoding="UTF-8"?>'
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>'
     f"<title>Mentally Stable X Experience: {name}</title>"
-    f"<link>{base_url}/</link>"
+    f"<link>{escape(base_url)}/</link>"
     f'<atom:link href="{escape(feed_url)}" rel="self" type="application/rss+xml"/>'
     f"<description>Weekly X newsletter for @{escape(account['handle'])}</description>"
     + "".join(items) + "</channel></rss>")

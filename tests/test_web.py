@@ -147,7 +147,13 @@ def test_edition_page_renders(client):
   eid = db.list_editions(c)[0]["id"]
   r = client.get(f"/editions/{eid}")
   assert r.status_code == 200
-  assert "hello world" in r.text; assert "$0.020" in r.text
+  assert "hello world" in r.text
+  assert "$0.02" in r.text
+  # Homepage locks scroll for the carousel; edition pages must re-enable page scroll.
+  assert 'class="page-edition"' in r.text
+  assert "overflow: auto" in r.text
+  assert "edition-panel" in r.text
+  assert "← Home" in r.text
 
 def test_edition_page_renders_media(client):
   c = db.connect(client.db_path)

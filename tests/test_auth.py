@@ -68,6 +68,19 @@ def test_rss_feed_is_public_without_login(auth_client):
   assert "hello rss" in r.text
   assert "/auth/login" not in r.headers.get("location", "")
 
+def test_edition_page_is_public_without_login(auth_client):
+  # Feed item links point at /editions/{id}; those deep links must open without a cookie.
+  c = db.connect(auth_client.app.state.db_path)
+  aid = db.add_account(c, "alice")
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z",
+    [{"tweet_id": "1", "kind": "post", "text": "hello edition", "created_at": "2026-06-30T10:00:00Z",
+      "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0}], 0.01)
+  eid = db.list_editions(c)[0]["id"]
+  r = auth_client.get(f"/editions/{eid}", follow_redirects=False)
+  assert r.status_code == 200
+  assert "hello edition" in r.text
+  assert 'class="mark-check' not in r.text  # mark-read UI only when signed in
+
 def test_login_page_is_public(auth_client):
   r = auth_client.get("/auth/login")
   assert r.status_code == 200

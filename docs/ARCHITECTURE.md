@@ -23,7 +23,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Account lists (homepage carousel and settings) sort by handle case-insensitively (`ORDER BY handle COLLATE NOCASE`) so mixed-case handles do not sort ahead of lowercase ones.
 - Favicon: classical serif capital **Y** on cream (`/static/favicon.svg` + PNG fallback), linked from the base template.
 - Carousel navigation: mouse wheel over card chrome or gaps scrolls horizontally between cards; wheel over the newsletter body scrolls vertically inside that card. Left/right arrow keys move between cards; up/down arrow keys scroll inside the centered card. Card bodies and the carousel hide scrollbars.
-- RSS: per-account feeds at `/feeds/{id}.xml`. These routes are **public** (no login cookie) so external feed readers can poll them. Web UI routes still require sign-in. Feed items are weekly editions; `<pubDate>` is RFC 822. Anyone who knows a feed URL can read that account’s newsletter content.
+- RSS: per-account feeds at `/feeds/{id}.xml`. These routes are **public** (no login cookie) so external feed readers can poll them. Item deep links at `/editions/{id}` are public too (same content is already in the feed); mark-read controls appear only when signed in. Other web UI routes still require sign-in. Feed items are weekly editions; `<pubDate>` is RFC 822; HTML item bodies sit in CDATA so the document stays well-formed XML. Anyone who knows a feed or edition URL can read that account’s newsletter content.
 
 ## Tech stack
 - Backend: Python + FastAPI — one app serves web pages, RSS, and the weekly fetch.

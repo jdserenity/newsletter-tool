@@ -33,7 +33,13 @@ X API v2 returns a short `text` field unless `tweet.fields` includes `note_tweet
 SQLite's default `ORDER BY handle` is binary/ASCII: uppercase `R` sorts before lowercase `a`, so `RuxandraTeslo` appeared first. Use `ORDER BY handle COLLATE NOCASE`.
 
 ## RSS readers say the feed does not exist
-Root cause: `RequireAuthMiddleware` required a browser session for every path except `/auth/*`. Feed readers request `/feeds/{id}.xml` with no cookie, got a 303 to the HTML login page, and failed to parse RSS. Fix: treat `/feeds/` (and `/static/`) as public. Second issue: raw SQLite `built_at` is not a valid RSS `<pubDate>` — use RFC 822 via `email.utils.format_datetime`.
+Three separate causes (any one breaks readers):
+1. **Auth:** `RequireAuthMiddleware` required a browser session for every path except `/auth/*`. Feed readers request `/feeds/{id}.xml` with no cookie, got a 303 to the HTML login page, and failed to parse RSS. Fix: treat `/feeds/` as public (also `/static/`, and `/editions/` for feed deep links).
+2. **`<pubDate>`:** raw SQLite `built_at` is not valid RSS — use RFC 822 via `email.utils.format_datetime`.
+3. **Invalid XML:** item `<description>` embeds HTML (`<br>`, `<img>`, multi-item separators). Putting those tags raw inside XML makes the document not well-formed; strict readers report “feed not found”. Fix: wrap description HTML in CDATA (and split on `]]>` if it appears in tweet text).
+
+## Edition page from RSS feels broken / won’t scroll
+Homepage CSS sets `html, body { overflow: hidden }` so the carousel owns scrolling. Settings overrides that with `body.page-settings`. The edition template used the default body class, so long newsletters could not scroll and looked like a broken page. Fix: `body.page-edition` + an `edition-panel` layout that mirrors a single newsletter card.
 
 `week_bounds()` in `app/fetch/runner.py` uses the most recent complete Monday-to-Monday window in UTC.
 

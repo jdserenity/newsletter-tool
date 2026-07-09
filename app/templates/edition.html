@@ -1,40 +1,56 @@
 {% extends "base.html" %}
 {% from "_tweet_macros.html" import tweet_media, quoted_block %}
+{% block body_class %}page-edition{% endblock %}
 {% block title %}@{{ edition.handle }} — week of {{ edition.week_start[:10] }}{% endblock %}
 {% block content %}
-<h2>@{{ edition.handle }} — week of {{ edition.week_start[:10] }}</h2>
-<div class="card">
-  <span class="muted">{{ edition.item_count }} items · API cost ${{ "%.3f"|format(edition.cost_usd) }} ·
-  built {{ edition.built_at }}</span>
+<div class="edition-panel">
+  <p class="muted edition-back"><a href="/">← Home</a></p>
+  <article class="edition-card">
+    <div class="edition-header">
+      <div class="newsletter-identity">
+        <a href="https://x.com/{{ edition.handle }}" target="_blank" rel="noopener noreferrer">@{{ edition.handle }}</a>
+        {% if edition.display_name %}<span class="muted">{{ edition.display_name }}</span>{% endif %}
+      </div>
+      <div class="week-label muted">
+        Week of {{ edition.week_start[:10] }} · {{ edition.item_count }} items ·
+        ${{ "%.2f"|format(edition.cost_usd) }} · built {{ edition.built_at }}
+      </div>
+    </div>
+    <div class="edition-body">
+      <div class="tweet-list">
+      {% for item in items %}
+      {% set is_read = item.tweet_id in read_tweet_ids %}
+      <div class="tweet{% if is_read %} tweet-read{% endif %}" data-tweet-id="{{ item.tweet_id }}" data-created-at="{{ item.created_at }}">
+        <div class="tweet-text">
+          <span class="text-content">{{ item.text }}</span>
+          <button type="button" class="tweet-more" hidden>More</button>
+        </div>
+        {{ tweet_media(item.media, item.url) }}
+        {{ quoted_block(item.quoted) }}
+        <div class="meta">
+          <span class="meta-bits">
+            <span class="pill">{{ item.kind }}</span>
+            {{ item.created_at[:16].replace("T", " · ") }} ·
+            {{ item.likes }} likes · {{ item.reposts }} reposts ·
+            <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">view on X</a>
+          </span>
+          {% if user %}
+          <button type="button" class="mark-check{% if is_read %} is-read{% endif %}"
+            data-tweet-id="{{ item.tweet_id }}"
+            aria-pressed="{{ 'true' if is_read else 'false' }}"
+            aria-label="{{ 'Mark as unread' if is_read else 'Mark as read' }}"
+            title="{{ 'Mark as unread' if is_read else 'Mark as read' }}"></button>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <p class="muted">Nothing this week.</p>
+      {% endfor %}
+      </div>
+    </div>
+  </article>
 </div>
-
-<div class="tweet-list">
-{% for item in items %}
-{% set is_read = item.tweet_id in read_tweet_ids %}
-<div class="tweet{% if is_read %} tweet-read{% endif %}" data-tweet-id="{{ item.tweet_id }}" data-created-at="{{ item.created_at }}">
-  <div class="tweet-text">
-    <span class="text-content">{{ item.text }}</span>
-    <button type="button" class="tweet-more" hidden>More</button>
-  </div>
-  {{ tweet_media(item.media, item.url) }}
-  {{ quoted_block(item.quoted) }}
-  <div class="meta">
-    <span class="meta-bits">
-      <span class="pill">{{ item.kind }}</span>
-      {{ item.created_at[:16].replace("T", " · ") }} ·
-      {{ item.likes }} likes · {{ item.reposts }} reposts ·
-      <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">view on X</a>
-    </span>
-    <button type="button" class="mark-check{% if is_read %} is-read{% endif %}"
-      data-tweet-id="{{ item.tweet_id }}"
-      aria-pressed="{{ 'true' if is_read else 'false' }}"
-      aria-label="{{ 'Mark as unread' if is_read else 'Mark as read' }}"
-      title="{{ 'Mark as unread' if is_read else 'Mark as read' }}"></button>
-  </div>
-</div>
-{% else %}
-<p class="muted">Nothing this week.</p>
-{% endfor %}
-</div>
+{% if user %}
 <script src="/static/home.js"></script>
+{% endif %}
 {% endblock %}
