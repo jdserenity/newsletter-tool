@@ -119,7 +119,14 @@ def test_callback_exchanges_code_and_sets_session(auth_client, monkeypatch):
   assert 'class="site-user"' in r.text
   assert "Signed in as" in r.text
   assert 'href="/settings"' in r.text
+  assert ">Settings</a>" in r.text
   assert 'class="site-actions"' in r.text
+  # On settings, the same control becomes Home so you can leave the page.
+  r = auth_client.get("/settings")
+  assert r.status_code == 200
+  assert 'href="/"' in r.text
+  assert ">Home</a>" in r.text
+  assert ">Settings</a>" not in r.text
 
 def test_add_account_follows_from_owner_session(auth_client, monkeypatch):
   follow_calls = []

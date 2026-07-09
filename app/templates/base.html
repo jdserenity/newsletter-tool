@@ -226,7 +226,11 @@
     <div class="site-user">
       <span class="muted">Signed in as <strong>@{{ user.username }}</strong></span>
       <div class="site-actions">
+        {% if request.url.path.rstrip('/') == '/settings' %}
+        <a class="ghost" href="/">Home</a>
+        {% else %}
         <a class="ghost" href="/settings">Settings</a>
+        {% endif %}
         <form class="inline" method="post" action="/auth/logout"><button class="ghost" type="submit">Sign out</button></form>
       </div>
     </div>
