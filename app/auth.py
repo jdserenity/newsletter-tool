@@ -151,8 +151,8 @@ def http_client(config):
 # Paths any client may hit without a browser login cookie.
 # /feeds/ must stay public: RSS readers do not send session cookies, so requiring
 # auth made them receive the HTML login page (or a redirect) and report "feed not found".
-PUBLIC_PREFIXES = ("/auth/", "/feeds/", "/static/")
-
+# /editions/ is public too: feed item links deep-link here; content is already in the feed.
+PUBLIC_PREFIXES = ("/auth/", "/feeds/", "/editions/", "/static/")
 class RequireAuthMiddleware:
   def __init__(self, app, config: AuthConfig):
     self.app = app
