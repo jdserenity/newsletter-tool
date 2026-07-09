@@ -38,8 +38,8 @@ Three separate causes (any one breaks readers):
 2. **`<pubDate>`:** raw SQLite `built_at` is not valid RSS — use RFC 822 via `email.utils.format_datetime`.
 3. **Invalid XML:** item `<description>` embeds HTML (`<br>`, `<img>`, multi-item separators). Putting those tags raw inside XML makes the document not well-formed; strict readers report “feed not found”. Fix: wrap description HTML in CDATA (and split on `]]>` if it appears in tweet text).
 
-## Edition page from RSS feels broken / won’t scroll
-Homepage CSS sets `html, body { overflow: hidden }` so the carousel owns scrolling. Settings overrides that with `body.page-settings`. The edition template used the default body class, so long newsletters could not scroll and looked like a broken page. Fix: `body.page-edition` + an `edition-panel` layout that mirrors a single newsletter card.
+## Edition / settings pages won’t scroll
+Homepage CSS sets `html, body { overflow: hidden }` so the carousel owns scrolling. Overriding only `body.page-settings` / `body.page-edition` is not enough — `html` still has `overflow: hidden` and the document never scrolls. Unlock both with `html:has(body.page-…)` and the matching body class. Edition also uses an `edition-panel` layout that mirrors a single newsletter card.
 
 `week_bounds()` in `app/fetch/runner.py` uses the most recent complete Monday-to-Monday window in UTC.
 
