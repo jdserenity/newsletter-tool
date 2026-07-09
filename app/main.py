@@ -35,7 +35,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     yield
     if scheduler: scheduler.shutdown(wait=False)
 
-  app = FastAPI(title="newsletter-tool", lifespan=lifespan)
+  app = FastAPI(title="Mentally Stable X Experience", lifespan=lifespan)
   app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
   app.state.db_path = path
   app.state.auth_config = auth_config
@@ -100,12 +100,20 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       return RedirectResponse("/auth/login", status_code=303)
 
   def newsletter_cards(c):
+    from app.fetch.runner import week_bounds
+    current_week_start, _ = week_bounds()
     cards = []
     for a in db.list_accounts(c):
       a["total_cost"] = db.cost_for_account(c, a["id"])
       edition = db.latest_edition(c, a["id"])
+      week_start = edition["week_start"] if edition else current_week_start
+      if db.is_newsletter_read(c, a["id"], week_start): continue
       items = json.loads(edition["content_json"]) if edition else []
-      cards.append({"account": a, "edition": edition, "entries": items})
+      tweet_ids = [i["tweet_id"] for i in items if i.get("tweet_id")]
+      read_ids = db.read_tweet_ids(c, tweet_ids)
+      cards.append({
+        "account": a, "edition": edition, "entries": items,
+        "week_start": week_start, "read_tweet_ids": read_ids})
     return cards
 
   @app.get("/", response_class=HTMLResponse)
@@ -164,12 +172,31 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
                        include_replies=include_replies, include_retweets=include_retweets)
     return RedirectResponse("/", status_code=303)
 
+  @app.post("/tweets/{tweet_id}/read")
+  def set_tweet_read(tweet_id: str, read: bool = Form(False)):
+    c = conn()
+    if read: db.mark_tweet_read(c, tweet_id)
+    else: db.mark_tweet_unread(c, tweet_id)
+    return RedirectResponse("/", status_code=303)
+
+  @app.post("/accounts/{account_id}/read-newsletter")
+  def set_newsletter_read(account_id: int, week_start: str = Form(...)):
+    c = conn()
+    if not db.get_account(c, account_id=account_id): raise HTTPException(404)
+    if not week_start.strip(): raise HTTPException(400, "week_start required")
+    db.mark_newsletter_read(c, account_id, week_start.strip())
+    return RedirectResponse("/", status_code=303)
+
   @app.get("/editions/{edition_id}", response_class=HTMLResponse)
   def edition_page(request: Request, edition_id: int):
-    edition = db.get_edition(conn(), edition_id)
+    c = conn()
+    edition = db.get_edition(c, edition_id)
     if not edition: raise HTTPException(404)
     items = json.loads(edition["content_json"])
-    return render(request, "edition.html", {"edition": edition, "items": items})
+    tweet_ids = [i["tweet_id"] for i in items if i.get("tweet_id")]
+    read_ids = db.read_tweet_ids(c, tweet_ids)
+    return render(request, "edition.html", {
+      "edition": edition, "items": items, "read_tweet_ids": read_ids})
 
   @app.get("/feeds/{account_id}.xml")
   def account_feed(request: Request, account_id: int):

@@ -26,7 +26,8 @@ def test_home_builds_newsletter_from_stored_tweets_on_load(client):
 def test_home_empty(client):
   r = client.get("/")
   assert r.status_code == 200
-  assert "Newsletter Tool" in r.text
+  assert "Mentally Stable X Experience" in r.text
+  assert "Newsletter Tool" not in r.text
   assert "Add account" in r.text
   assert "Estimate cost" in r.text
   assert "digest" not in r.text.lower()
@@ -205,3 +206,56 @@ def test_estimate_rejects_existing_account(client):
 def test_estimate_requires_handle(client):
   r = client.post("/accounts/estimate", data={"handle": "@"})
   assert r.status_code == 400
+
+def test_view_on_x_opens_in_new_tab(client):
+  _seed_edition(client.db_path)
+  r = client.get("/")
+  assert 'href="https://x.com/alice/status/1"' in r.text
+  assert 'target="_blank"' in r.text
+  assert 'rel="noopener noreferrer"' in r.text
+
+def test_mark_tweet_read_persists_and_shows_checked(client):
+  _seed_edition(client.db_path)
+  r = client.post("/tweets/1/read", data={"read": "true"}, follow_redirects=True)
+  assert r.status_code == 200
+  assert "hello world" in r.text
+  assert 'class="tweet tweet-read"' in r.text
+  assert "I read this" in r.text
+  assert 'name="read" value="false"' in r.text
+  c = db.connect(client.db_path)
+  assert db.is_tweet_read(c, "1")
+
+def test_unmark_tweet_read(client):
+  _seed_edition(client.db_path)
+  client.post("/tweets/1/read", data={"read": "true"})
+  r = client.post("/tweets/1/read", data={"read": "false"}, follow_redirects=True)
+  assert 'class="tweet tweet-read"' not in r.text
+  assert 'class="tweet"' in r.text
+  assert not db.is_tweet_read(db.connect(client.db_path), "1")
+
+def test_mark_newsletter_read_hides_card(client):
+  aid = _seed_edition(client.db_path)
+  r = client.get("/")
+  assert "hello world" in r.text
+  assert "I read this newsletter" in r.text
+  r = client.post(f"/accounts/{aid}/read-newsletter",
+                  data={"week_start": "2026-06-29T00:00:00Z"}, follow_redirects=True)
+  assert r.status_code == 200
+  assert "hello world" not in r.text
+  assert 'href="https://x.com/alice"' not in r.text
+  assert "Add account" in r.text
+
+def test_empty_newsletter_still_has_read_newsletter_button(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "quiet")
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", [], 0.0)
+  r = client.get("/")
+  assert "Nothing this week." in r.text
+  assert "I read this newsletter" in r.text
+  assert f'action="/accounts/{aid}/read-newsletter"' in r.text
+
+def test_account_without_edition_still_has_read_newsletter_button(client):
+  client.post("/accounts", data={"handle": "pending"})
+  r = client.get("/")
+  assert "No newsletter yet" in r.text
+  assert "I read this newsletter" in r.text

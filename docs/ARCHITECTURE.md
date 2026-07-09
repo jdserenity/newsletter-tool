@@ -4,7 +4,7 @@ Confirmed product and system facts for this project. Decisions only — no open 
 
 ## Product scope
 - Personal tool that turns selected X (Twitter) users' output into clean, filterable, inbox-friendly weekly newsletters, so the owner can log off X without losing high-value signal.
-- Product name in the UI: **Newsletter Tool**. Do not use the word "digest" anywhere in the codebase.
+- Product name in the UI: **Mentally Stable X Experience**. Do not use the word "digest" anywhere in the codebase.
 - "Inbox-friendly" does not mean email. Email is out of scope.
 - Single user for now (the owner). May become a sellable product later; no multi-tenant work yet.
 - Accessed via a webpage on the owner's VPS, as a subdomain of the owner's personal domain.
@@ -14,6 +14,9 @@ Confirmed product and system facts for this project. Decisions only — no open 
 - Per-account visibility into X API cost incurred by that account, computed from rows in the `api_calls` table (no log files).
 - Before adding a new account, **Estimate cost** on the add card calls X `GET /2/tweets/counts/all` three times (one per complete Mon–Mon week, oldest to newest) at ~$0.01/request (~$0.03 total). The app averages those tweet counts and projects weekly fetch cost as `avg_tweets × $0.005 + $0.01` user lookup, using default new-account settings (replies and retweets excluded at the API; quotes always counted). Rejects handles already tracked. Does not write to `api_calls`.
 - Homepage: horizontally scrollable carousel of newsletter cards (one per account). Each card shows settings toggles, API cost, and the latest newsletter inline — no separate account list or detail page. On load, missing newsletters are built from stored tweets when the current week has tweets but no edition row (no X API calls).
+- Links out to X (profile, tweet, quoted author, video media) and the per-account RSS feed open in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`). In-app navigation (home, Settings, sign-in) stays in the same tab.
+- Per-tweet "I read this" checkbox stores the tweet id in `read_tweets`. Read tweets stay visible but dimmed; unchecking clears the mark.
+- Per-newsletter "I read this newsletter" button at the bottom of every account card (including empty weeks and accounts with no edition yet). Stored in `read_newsletters` as `(account_id, week_start)`. That account's card is hidden on the homepage for that week; a later week's edition shows again.
 - Settings page at `/settings`: list tracked accounts with remove actions. Linked from a Settings button in the site header (left of Sign out).
 - Carousel navigation: mouse wheel over card chrome or gaps scrolls horizontally between cards; wheel over the newsletter body scrolls vertically inside that card. Left/right arrow keys move between cards; up/down arrow keys scroll inside the centered card. Card bodies and the carousel hide scrollbars.
 - RSS feed structure is not finalized (per-account vs consolidated recap). v1 ships per-account feeds at `/feeds/{id}.xml` as the baseline.

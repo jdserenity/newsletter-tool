@@ -13,7 +13,7 @@
       </div>
       <div class="newsletter-meta">
         <span class="api-cost">API ${{ "%.2f"|format(a.total_cost) }}</span>
-        <a class="rss-link" href="/feeds/{{ a.id }}.xml" title="RSS feed">
+        <a class="rss-link" href="/feeds/{{ a.id }}.xml" title="RSS feed" target="_blank" rel="noopener noreferrer">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z"/></svg>
           RSS
         </a>
@@ -40,7 +40,8 @@
       {% if e %}
       <div class="week-label muted"><span class="text-content">Week of {{ e.week_start[:10] }} · {{ e.item_count }} items · ${{ "%.2f"|format(e.cost_usd) }}</span></div>
       {% for item in card.entries %}
-      <div class="tweet">
+      {% set is_read = item.tweet_id in card.read_tweet_ids %}
+      <div class="tweet{% if is_read %} tweet-read{% endif %}">
         <div class="tweet-text"><span class="text-content">{{ item.text }}</span></div>
         {{ tweet_media(item.media, item.url) }}
         {{ quoted_block(item.quoted) }}
@@ -48,7 +49,14 @@
           <span class="pill">{{ item.kind }}</span>
           {{ item.created_at[:16].replace("T", " · ") }} ·
           {{ item.likes }} likes · {{ item.reposts }} reposts ·
-          <a href="{{ item.url }}">view on X</a>
+          <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">view on X</a>
+          <form class="tweet-read-form" method="post" action="/tweets/{{ item.tweet_id }}/read">
+            <input type="hidden" name="read" value="{{ 'false' if is_read else 'true' }}">
+            <label class="tweet-read-label">
+              <input type="checkbox" {% if is_read %}checked{% endif %} onchange="this.form.submit()">
+              I read this
+            </label>
+          </form>
         </div>
       </div>
       {% else %}
@@ -57,6 +65,12 @@
       {% else %}
       <p class="muted">No newsletter yet. Builds weekly, or run a fetch manually.</p>
       {% endif %}
+      <div class="newsletter-footer">
+        <form class="newsletter-read-form" method="post" action="/accounts/{{ a.id }}/read-newsletter">
+          <input type="hidden" name="week_start" value="{{ card.week_start }}">
+          <button class="newsletter-read-btn" type="submit">I read this newsletter</button>
+        </form>
+      </div>
     </div>
   </article>
   {% endfor %}
