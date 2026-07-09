@@ -224,8 +224,13 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     c = conn()
     account = db.get_account(c, account_id=account_id)
     if not account: raise HTTPException(404)
+    if not account.get("active", 1): raise HTTPException(404)
     editions = db.list_editions(c, account_id)
     base = str(request.base_url).rstrip("/")
-    return Response(newsletter_feed(account, editions, base), media_type="application/rss+xml")
+    # Public route (no session). Readers poll this URL without cookies.
+    return Response(
+      newsletter_feed(account, editions, base),
+      media_type="application/rss+xml; charset=utf-8",
+      headers={"Cache-Control": "public, max-age=300"})
 
   return app

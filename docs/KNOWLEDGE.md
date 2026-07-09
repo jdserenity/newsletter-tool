@@ -32,6 +32,9 @@ X API v2 returns a short `text` field unless `tweet.fields` includes `note_tweet
 ## Account sort and capital letters
 SQLite's default `ORDER BY handle` is binary/ASCII: uppercase `R` sorts before lowercase `a`, so `RuxandraTeslo` appeared first. Use `ORDER BY handle COLLATE NOCASE`.
 
+## RSS readers say the feed does not exist
+Root cause: `RequireAuthMiddleware` required a browser session for every path except `/auth/*`. Feed readers request `/feeds/{id}.xml` with no cookie, got a 303 to the HTML login page, and failed to parse RSS. Fix: treat `/feeds/` (and `/static/`) as public. Second issue: raw SQLite `built_at` is not a valid RSS `<pubDate>` — use RFC 822 via `email.utils.format_datetime`.
+
 `week_bounds()` in `app/fetch/runner.py` uses the most recent complete Monday-to-Monday window in UTC.
 
 ## Tests

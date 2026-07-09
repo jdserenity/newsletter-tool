@@ -194,10 +194,11 @@ def test_rss_feed(client):
   aid = _seed_edition(client.db_path)
   r = client.get(f"/feeds/{aid}.xml")
   assert r.status_code == 200
-  assert r.headers["content-type"].startswith("application/rss+xml")
+  assert "application/rss+xml" in r.headers["content-type"]
   assert "<rss" in r.text; assert "hello world" in r.text
   assert "week of 2026-06-29" in r.text
   assert "digest" not in r.text.lower()
+  assert "+0000</pubDate>" in r.text or "GMT</pubDate>" in r.text
 
 def test_missing_pages_404(client):
   assert client.get("/editions/999").status_code == 404
