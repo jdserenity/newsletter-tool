@@ -109,6 +109,12 @@
     margin-top: 1.25rem; padding-top: 0.9rem; border-top: 1px solid var(--border);
     display: flex; justify-content: center;
   }
+  /* When every tweet is checked off, the newsletter checkmark moves to the top
+     so you can finish the card without scrolling past dimmed posts. */
+  .newsletter-footer.is-top {
+    margin-top: 0; margin-bottom: 0.75rem; padding-top: 0; padding-bottom: 0.75rem;
+    border-top: none; border-bottom: 1px solid var(--border);
+  }
   .mark-check.mark-check-lg { font-size: 1.25rem; }
   .tweet-media { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; }
   .media-thumb { position: relative; display: block; line-height: 0; }

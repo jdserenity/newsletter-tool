@@ -27,6 +27,28 @@
     tweets.forEach(function(t) { list.appendChild(t); });
   }
 
+  // Newsletter checkmark lives at the bottom until every tweet is checked off,
+  // then moves to the top so you can dismiss the card without scrolling.
+  function updateNewsletterCheckPosition(body) {
+    if (!body) return;
+    var footer = body.querySelector('.newsletter-footer');
+    var list = body.querySelector('.tweet-list');
+    if (!footer || !list) return;
+    var tweets = list.querySelectorAll('.tweet');
+    if (!tweets.length) {
+      footer.classList.remove('is-top');
+      body.appendChild(footer);
+      return;
+    }
+    var allRead = true;
+    for (var i = 0; i < tweets.length; i++) {
+      if (!tweets[i].classList.contains('tweet-read')) { allRead = false; break; }
+    }
+    footer.classList.toggle('is-top', allRead);
+    if (allRead) body.insertBefore(footer, body.firstChild);
+    else body.appendChild(footer);
+  }
+
   function setupTextClamp(root) {
     (root || document).querySelectorAll('.tweet-text').forEach(function(wrap) {
       var text = wrap.querySelector('.text-content');
@@ -106,6 +128,7 @@
         if (tweet) {
           tweet.classList.toggle('tweet-read', nextRead);
           sortTweetList(tweet.parentElement);
+          updateNewsletterCheckPosition(tweet.closest('.newsletter-body'));
         }
       })
       .finally(function() { btn.disabled = false; });
