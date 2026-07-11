@@ -60,6 +60,8 @@ def test_settings_page_lists_accounts_and_remove(client):
   r = client.get("/settings")
   assert r.status_code == 200
   assert "Settings" in r.text
+  assert "Added accounts" in r.text
+  assert "Remove tracked accounts" not in r.text
   assert "@alice" in r.text
   assert "@bob" in r.text
   assert r.text.count("/remove") == 2
