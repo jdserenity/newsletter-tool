@@ -88,10 +88,13 @@ def build_account_edition(conn, account, week_start, week_end, cost=0.0, append_
   db.save_edition(conn, account["id"], week_start, week_end, items, cost)
   return items
 
-def _verify_editions(conn, week_start):
-  """Every active account must have a newsletter row for this period after a fetch run."""
-  missing = [a["handle"] for a in db.list_accounts(conn)
-    if db.edition_for_week(conn, a["id"], week_start) is None]
+def _verify_editions(conn, week_start, account_ids=None):
+  """Every requested active account must have a newsletter row for this period after a fetch run."""
+  accounts = db.list_accounts(conn)
+  if account_ids is not None:
+    want = set(account_ids)
+    accounts = [a for a in accounts if a["id"] in want]
+  missing = [a["handle"] for a in accounts if db.edition_for_week(conn, a["id"], week_start) is None]
   if missing:
     raise RuntimeError("Newsletter build failed for: " + ", ".join(f"@{h}" for h in missing))
 
@@ -111,20 +114,32 @@ def run_weekly_fetch(conn, client=None, now=None, db_path=None):
   """Fetch + build newsletters for all active accounts. Returns list of (handle, cost).
 
   Uses the stored cadence to pick the current period (weekly Mon–Mon or twice-weekly half-week).
+  Retries transient X errors inside the client. If one account still fails, others still build;
+  raises only when every account fails.
   """
   from app.user_actions import enqueue_newsletter_likes, start_like_drain
   client = client or XClient()
   settings = db.get_app_settings(conn)
   week_start, week_end = period_bounds(now, settings["cadence"])
-  costs = {}
+  costs = {}; errors = {}
   for account in db.list_accounts(conn):
-    costs[account["id"]] = fetch_account_week(conn, client, account, week_start, week_end, now=now)
+    try:
+      costs[account["id"]] = fetch_account_week(conn, client, account, week_start, week_end, now=now)
+    except Exception as e:
+      errors[account["handle"]] = e
+  if errors and not costs:
+    detail = "; ".join(f"@{h}: {err}" for h, err in errors.items())
+    raise RuntimeError("Fetch failed for all accounts: " + detail)
   results = []; enqueued = 0
   for account in db.list_accounts(conn):
-    items = build_account_edition(conn, account, week_start, week_end, costs.get(account["id"], 0.0),
+    if account["id"] not in costs: continue
+    items = build_account_edition(conn, account, week_start, week_end, costs[account["id"]],
       append_unread=bool(settings["append_unread"]))
     enqueued += enqueue_newsletter_likes(conn, items)
-    results.append((account["handle"], costs.get(account["id"], 0.0)))
-  _verify_editions(conn, week_start)
+    results.append((account["handle"], costs[account["id"]]))
+  _verify_editions(conn, week_start, account_ids=list(costs))
+  if errors:
+    for handle, err in errors.items():
+      print(f"warning: fetch failed for @{handle} after retries: {err}", flush=True)
   if db_path and enqueued > 0: start_like_drain(db_path)
   return results

@@ -9,8 +9,12 @@ from app.fetch.runner import (
   fetch_account_week, period_bounds, repair_missing_editions, run_weekly_fetch, week_bounds)
 
 class FakeResponse:
-  def __init__(self, body): self.body = body
-  def raise_for_status(self): pass
+  def __init__(self, body, status_code=200):
+    self.body = body; self.status_code = status_code; self.headers = {}
+  def raise_for_status(self):
+    if self.status_code >= 400:
+      import httpx
+      raise httpx.HTTPStatusError("err", request=httpx.Request("GET", "https://api.x.com/2/x"), response=self)
   def json(self): return self.body
 
 class FakeHttp:
@@ -273,3 +277,62 @@ def test_fetch_rebills_tweets_after_24h_window(conn):
   account = db.get_account(conn, account_id=aid)
   cost = fetch_account_week(conn, client, account, *week, now=now + timedelta(hours=25))
   assert abs(cost - 2 * COST_PER_POST_READ) < 1e-9
+
+
+def test_get_user_tweets_retries_503_then_succeeds():
+  import httpx
+  class SeqHttp:
+    def __init__(self):
+      self.n = 0; self.requests = []; self.sleeps = []
+    def get(self, path, params=None):
+      self.requests.append((path, params or {})); self.n += 1
+      req = httpx.Request("GET", "https://api.x.com/2/x")
+      if self.n < 3:
+        return httpx.Response(503, request=req)
+      return httpx.Response(200, json={"data": [TWEETS[0]], "meta": {}}, request=req)
+  http = SeqHttp()
+  client = XClient(bearer_token="t", http=http, sleep=http.sleeps.append)
+  tweets, _, _ = client.get_user_tweets("111", "2026-07-06T00:00:00Z", "2026-07-09T00:00:00Z",
+                                        include_replies=False, include_retweets=False)
+  assert len(tweets) == 1
+  assert len(http.requests) == 3
+  assert http.sleeps == [2.0, 4.0]
+
+def test_get_user_tweets_gives_up_after_retries():
+  import httpx, pytest
+  class Always503:
+    def __init__(self): self.n = 0
+    def get(self, path, params=None):
+      self.n += 1
+      return httpx.Response(503, request=httpx.Request("GET", "https://api.x.com/2/x"))
+  http = Always503()
+  client = XClient(bearer_token="t", http=http, sleep=lambda s: None, max_retries=2)
+  with pytest.raises(httpx.HTTPStatusError):
+    client.get_user_tweets("111", "2026-07-06T00:00:00Z", "2026-07-09T00:00:00Z",
+                           include_replies=False, include_retweets=False)
+  assert http.n == 3  # initial + 2 retries
+
+def test_run_weekly_fetch_continues_when_one_account_fails(conn, capsys):
+  import httpx
+  db.update_app_settings(conn, cadence="weekly")
+  db.add_account(conn, "alice")
+  db.add_account(conn, "bob")
+  db.set_account_identity(conn, db.get_account(conn, handle="alice")["id"], "111", "Alice")
+  db.set_account_identity(conn, db.get_account(conn, handle="bob")["id"], "222", "Bob")
+
+  class MixedHttp:
+    def get(self, path, params=None):
+      req = httpx.Request("GET", "https://api.x.com/2/x")
+      if "/222/" in path:
+        return httpx.Response(503, request=req)
+      return FakeResponse({"data": copy.deepcopy(TWEETS), "includes": {}, "meta": {}})
+
+  client = XClient(bearer_token="t", http=MixedHttp(), sleep=lambda s: None, max_retries=1)
+  now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
+  results = run_weekly_fetch(conn, client=client, now=now)
+  handles = {h for h, _ in results}
+  assert handles == {"alice"}
+  ws, _ = week_bounds(now)
+  assert db.edition_for_week(conn, db.get_account(conn, handle="alice")["id"], ws) is not None
+  assert db.edition_for_week(conn, db.get_account(conn, handle="bob")["id"], ws) is None
+  assert "fetch failed for @bob" in capsys.readouterr().out

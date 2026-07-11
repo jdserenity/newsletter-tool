@@ -132,7 +132,9 @@ def test_add_account_follows_from_owner_session(auth_client, monkeypatch):
   follow_calls = []
   def fake_follow(conn, actions_client, access_token, owner_user_id, account, read_client=None):
     follow_calls.append((access_token, owner_user_id, account["handle"]))
+    db.mark_account_followed(conn, account["id"])
   monkeypatch.setattr("app.main.follow_tracked_account", fake_follow)
+  monkeypatch.setattr("app.main.retry_pending_follows", lambda *a, **k: 0)
   monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
     "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "user-at", "refresh_token": "user-rt"})

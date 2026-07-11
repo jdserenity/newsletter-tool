@@ -1,12 +1,18 @@
 """X API v2 client. Pay-per-use pricing (verified 2026-07): ~$0.005/post read, ~$0.010/user read.
 Every call records units + estimated cost to the api_calls table via the caller."""
 import os
+import time
 import httpx
 
 BASE_URL = "https://api.x.com/2"
 COST_PER_POST_READ = 0.005
 COST_PER_USER_READ = 0.010
 COST_PER_COUNTS_ALL = 0.010
+
+# Transient X / network failures worth retrying before giving up on a newsletter run.
+RETRYABLE_STATUS = {408, 425, 429, 500, 502, 503, 504}
+DEFAULT_MAX_RETRIES = 5
+DEFAULT_BACKOFF_BASE = 2.0  # seconds; delays 2, 4, 8, 16, 32
 
 # note_tweet carries full text for long posts; without it, X truncates `text` (~280 chars).
 TWEET_FIELDS = "created_at,referenced_tweets,entities,public_metrics,attachments,author_id,note_tweet"
@@ -57,14 +63,46 @@ def enrich_tweets(page, includes):
   attach_media(page, includes); attach_quoted(page, includes)
   return page
 
+def retry_delay_seconds(attempt, response=None, base=DEFAULT_BACKOFF_BASE):
+  """Seconds to wait before the next try. attempt is 0-based (first retry = 0)."""
+  if response is not None and response.status_code == 429:
+    ra = response.headers.get("Retry-After")
+    if ra:
+      try: return max(float(ra), 0.0)
+      except ValueError: pass
+  return base * (2 ** attempt)
+
+def get_with_retries(http, path, *, params=None, max_retries=DEFAULT_MAX_RETRIES,
+                     sleep=time.sleep, backoff_base=DEFAULT_BACKOFF_BASE):
+  """GET with retries on transient status codes and transport errors."""
+  last_exc = None
+  for attempt in range(max_retries + 1):
+    try:
+      r = http.get(path, params=params)
+    except httpx.TransportError as e:
+      last_exc = e
+      if attempt >= max_retries: raise
+      sleep(retry_delay_seconds(attempt, base=backoff_base)); continue
+    if r.status_code in RETRYABLE_STATUS and attempt < max_retries:
+      sleep(retry_delay_seconds(attempt, response=r, base=backoff_base)); continue
+    r.raise_for_status()
+    return r
+  if last_exc: raise last_exc
+  raise RuntimeError("get_with_retries exhausted without response")
+
 class XClient:
-  def __init__(self, bearer_token=None, http=None):
+  def __init__(self, bearer_token=None, http=None, sleep=time.sleep, max_retries=DEFAULT_MAX_RETRIES):
     self.token = bearer_token or os.environ.get("X_BEARER_TOKEN", "")
     self.http = http or httpx.Client(base_url=BASE_URL, headers={"Authorization": f"Bearer {self.token}"}, timeout=30)
+    self.sleep = sleep
+    self.max_retries = max_retries
+
+  def _get(self, path, params=None):
+    return get_with_retries(self.http, path, params=params, max_retries=self.max_retries, sleep=self.sleep)
 
   def get_user_by_handle(self, handle):
     """Returns ({id, name, username}, cost_usd)."""
-    r = self.http.get(f"/users/by/username/{handle}"); r.raise_for_status()
+    r = self._get(f"/users/by/username/{handle}")
     return r.json()["data"], COST_PER_USER_READ
 
   def get_user_tweets(self, x_user_id, start_time, end_time, include_replies, include_retweets):
@@ -81,7 +119,7 @@ class XClient:
         "media.fields": MEDIA_FIELDS, "user.fields": USER_FIELDS}
       if excludes: params["exclude"] = ",".join(excludes)
       if token: params["pagination_token"] = token
-      r = self.http.get(f"/users/{x_user_id}/tweets", params=params); r.raise_for_status()
+      r = self._get(f"/users/{x_user_id}/tweets", params=params)
       body = r.json(); page = body.get("data", [])
       enrich_tweets(page, body.get("includes"))
       reads = count_post_reads(body); units += reads; cost += reads * COST_PER_POST_READ
@@ -96,7 +134,7 @@ class XClient:
     while True:
       p = dict(params)
       if token: p["pagination_token"] = token
-      r = self.http.get("/tweets/counts/all", params=p); r.raise_for_status()
+      r = self._get("/tweets/counts/all", params=p)
       body = r.json()
       total += sum(b.get("tweet_count", 0) for b in body.get("data", []))
       cost += COST_PER_COUNTS_ALL

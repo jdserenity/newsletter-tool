@@ -85,6 +85,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - **Fetch:** settings exclude replies/retweets at API when off. Quotes always fetched; filtered in builder if `include_quotes` off. Fields include `note_tweet`, media keys, `referenced_tweets.id` (quoted posts extra post reads). Media on `raw_json`; photos inline; video/GIF thumb → X. Media `t.co` stripped at build. `api_calls.units` = timeline tweets + expanded referenced IDs per page.
 - **Owner actions:** add account → POST follow (no following-list precheck). After edition build → enqueue likes; background drain: first like immediate, then ~60s ±1–20s. Tokens in `oauth_session` with `expires_at` (refresh only when needed during drain/maintenance). `liked_tweets` / `like_queue`. Startup resumes non-empty queue. Unfollowed tracked accounts retried in background on home load + on startup when OAuth present.
 - Period window: `period_bounds(now, cadence)` — weekly: most recent complete Mon–Mon UTC; twice_weekly: most recent complete Mon–Thu or Thu–Mon UTC (`app/fetch/runner.py`). Manual fetch (`news-manual-fetch` / `run_job`) uses the same bounds from stored cadence.
+- **X fetch retries:** bearer GETs retry on 408/425/429/500/502/503/504 and transport errors (5 retries, exponential backoff 2s…32s; 429 honors `Retry-After`). If one account still fails, others still build editions; run raises only when every account fails.
 
 ## Run / deploy
 ```bash
