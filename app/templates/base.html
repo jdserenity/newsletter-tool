@@ -283,12 +283,15 @@
     .toggle input:checked + .toggle-rail .toggle-thumb { transform: translateX(18px); }
     .newsletter-body { padding: 0.65rem 0.85rem 0.85rem; }
     .tweet .meta {
-      display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+      display: flex; flex-wrap: nowrap; align-items: center; gap: 0;
     }
     .tweet-actions { display: contents; }
-    .tweet .mark-check { grid-column: 1; }
-    .tweet .meta-bits { grid-column: 2; }
-    .tweet .mark-dislike { grid-column: 3; }
+    .tweet .mark-check { order: 1; flex: 0 0 44px; }
+    .tweet .meta-bits {
+      order: 2; flex: 1 1 auto; min-width: 0;
+      text-align: center; justify-content: center;
+    }
+    .tweet .mark-dislike { order: 3; flex: 0 0 44px; }
     .mark-check, .mark-dislike {
       min-width: 44px; min-height: 44px; padding: 0.5rem;
     }

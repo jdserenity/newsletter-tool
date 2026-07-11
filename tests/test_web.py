@@ -349,7 +349,7 @@ def test_home_tweet_actions_grouped_on_desktop_separated_on_mobile_css(client):
   meta_pos = r.text.find('class="meta-bits"', meta_start)
   assert check_pos != -1 and dislike_pos != -1
   assert check_pos < dislike_pos < meta_pos  # desktop markup: ✓ X together, then meta
-  assert "display: contents" in r.text and "grid-template-columns: auto 1fr auto" in r.text
+  assert "text-align: center" in r.text and "order: 2" in r.text
 
 def test_mark_newsletter_read_json_hides_on_next_load(client):
   aid = _seed_edition(client.db_path)
