@@ -29,7 +29,7 @@ Not email. Not multi-user. Hosted on your VPS as a subdomain.
 | **Edition** `/editions/{id}` | Single week for RSS deep links (public). Like/dislike only if signed in. |
 | **RSS** `/feeds/{id}.xml` | Public feed per account (no login cookie). |
 
-**Reading flow:** each tweet has a checkmark on the **left** (like on X when you click it) and an × on the **right** (dislike — local only, for later category suggestions). Either one marks the tweet read — it dims and sinks to the bottom. Re-clicking undoes it (and unlikes on X if you had liked). When every tweet is handled, the big newsletter checkmark moves to the **top** of the card so you can dismiss the whole week without scrolling. Empty weeks keep that checkmark at the bottom.
+**Reading flow:** each tweet shows meta on the left (kind, date, stats, link). On the right, **X** then **✓** sit together — X dislikes (local bucket for later suggestions), ✓ likes on X when you click. Either marks the tweet read (dims and sinks to the bottom). Re-clicking undoes it. When every tweet is handled, the big newsletter checkmark moves to the **top** of the card so you can dismiss the whole week without scrolling. Empty weeks keep that checkmark at the bottom.
 
 **Carousel:** scroll sideways between accounts; scroll inside a card for long weeks. Toolbar toggles and like/dislike save in place (no full page reload). On a phone, each card is nearly full-screen width with snap-between-cards scrolling; the tall desktop toolbar stacks so toggles stay tappable.
 

@@ -338,18 +338,20 @@ def test_unmark_tweet_read_clears_feedback(client):
   home = client.get("/")
   assert 'class="tweet tweet-read"' not in home.text
 
-def test_home_tweet_actions_grouped_on_desktop_separated_on_mobile_css(client):
+def test_home_tweet_meta_left_x_check_right(client):
   _seed_edition(client.db_path)
   r = client.get("/")
-  assert 'class="tweet-actions"' in r.text
-  meta_start = r.text.find('class="tweet-actions"')
-  chunk = r.text[meta_start:meta_start + 500]
-  check_pos = chunk.find("mark-check")
+  meta_start = r.text.find('class="meta"')
+  assert meta_start != -1
+  chunk = r.text[meta_start:meta_start + 900]
+  meta_pos = chunk.find("meta-bits")
+  actions_pos = chunk.find("tweet-actions")
   dislike_pos = chunk.find("mark-dislike")
-  meta_pos = r.text.find('class="meta-bits"', meta_start)
-  assert check_pos != -1 and dislike_pos != -1
-  assert check_pos < dislike_pos < meta_pos  # desktop markup: ✓ X together, then meta
-  assert "text-align: center" in r.text and "order: 2" in r.text
+  check_pos = chunk.find("mark-check")
+  assert meta_pos != -1 and actions_pos != -1
+  assert meta_pos < actions_pos
+  assert dislike_pos < check_pos
+  assert "order: 2" not in r.text
 
 def test_mark_newsletter_read_json_hides_on_next_load(client):
   aid = _seed_edition(client.db_path)

@@ -108,7 +108,7 @@
   .tweet-text.is-clamped .tweet-more, .tweet-text.is-expanded .tweet-more { display: inline-block; }
   .tweet .meta {
     color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem;
-    display: flex; flex-wrap: nowrap; align-items: center; gap: 0.35rem 0.5rem;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem;
   }
   .tweet .meta-bits { flex: 1 1 auto; min-width: 0; }
   .tweet-actions {
@@ -282,16 +282,6 @@
     .toggle-thumb { width: 24px; height: 24px; }
     .toggle input:checked + .toggle-rail .toggle-thumb { transform: translateX(18px); }
     .newsletter-body { padding: 0.65rem 0.85rem 0.85rem; }
-    .tweet .meta {
-      display: flex; flex-wrap: nowrap; align-items: center; gap: 0;
-    }
-    .tweet-actions { display: contents; }
-    .tweet .mark-check { order: 1; flex: 0 0 44px; }
-    .tweet .meta-bits {
-      order: 2; flex: 1 1 auto; min-width: 0;
-      text-align: center; justify-content: center;
-    }
-    .tweet .mark-dislike { order: 3; flex: 0 0 44px; }
     .mark-check, .mark-dislike {
       min-width: 44px; min-height: 44px; padding: 0.5rem;
     }
