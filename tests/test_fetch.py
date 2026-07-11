@@ -344,11 +344,20 @@ def test_get_with_retries_logs_retry_delay():
     def __init__(self): self.n = 0
     def get(self, path, params=None):
       self.n += 1
-      return httpx.Response(503, request=httpx.Request("GET", "https://api.x.com/2/x"))
+      return httpx.Response(503, request=httpx.Request("GET", "https://api.x.com/2/x"),
+        json={"detail": "Service Unavailable", "status": 503, "title": "Service Unavailable", "type": "about:blank"})
   logs = []; sleeps = []
   http = SeqHttp()
   with pytest.raises(httpx.HTTPStatusError):
     from app.fetch.client import get_with_retries
     get_with_retries(http, "/users/1/tweets", max_retries=1, sleep=sleeps.append, log=logs.append)
   assert any("503" in m and "retrying" in m for m in logs)
+  assert any("Pay-Per-Use" in m for m in logs)
   assert sleeps == [2.0]
+
+def test_x_api_error_hint_blank_503():
+  import httpx
+  from app.fetch.client import x_api_error_hint
+  r = httpx.Response(503, json={"detail": "Service Unavailable", "status": 503, "type": "about:blank"})
+  assert "Pay-Per-Use" in x_api_error_hint(r)
+  assert x_api_error_hint(httpx.Response(401)) == ""

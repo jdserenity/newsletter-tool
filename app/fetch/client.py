@@ -20,6 +20,17 @@ MEDIA_FIELDS = "url,preview_image_url,type,alt_text,width,height"
 USER_FIELDS = "username"
 EXPANSIONS = "attachments.media_keys,referenced_tweets.id,referenced_tweets.id.attachments.media_keys,referenced_tweets.id.author_id"
 
+def x_api_error_hint(response):
+  """Actionable hint when X returns a generic 503 (often project/billing, not our date range)."""
+  if response.status_code != 503: return ""
+  try:
+    body = response.json()
+  except Exception:
+    return ""
+  if body.get("type") != "about:blank" or body.get("detail") != "Service Unavailable": return ""
+  return (" (X returns this generic 503 for blocked v2 access — check Pay-Per-Use enrollment, "
+          "credits, and app status at developer.x.com; not caused by newsletter cadence dates)")
+
 def count_post_reads(body):
   """Unique post IDs in data + includes.tweets — each counts toward billing."""
   ids = set()
@@ -90,6 +101,9 @@ def get_with_retries(http, path, *, params=None, max_retries=DEFAULT_MAX_RETRIES
       delay = retry_delay_seconds(attempt, response=r, base=backoff_base)
       if log: log(f"  X API {r.status_code}, retrying in {delay:.0f}s...")
       sleep(delay); continue
+    if r.status_code >= 400 and log:
+      hint = x_api_error_hint(r)
+      log(f"  X API {r.status_code}: {r.text[:300]}{hint}")
     r.raise_for_status()
     return r
   if last_exc: raise last_exc
