@@ -292,27 +292,66 @@ def test_view_on_x_opens_in_new_tab(client):
   assert 'target="_blank"' in r.text
   assert 'rel="noopener noreferrer"' in r.text
 
-def test_mark_tweet_read_json_no_redirect(client):
+def test_like_tweet_json_marks_read_and_liked(client):
   _seed_edition(client.db_path)
-  r = client.post("/tweets/1/read", data={"read": "true"},
-                  headers={"Accept": "application/json"})
+  r = client.post("/tweets/1/like", headers={"Accept": "application/json"})
   assert r.status_code == 200
-  assert r.json() == {"ok": True, "tweet_id": "1", "read": True}
-  assert db.is_tweet_read(db.connect(client.db_path), "1")
+  assert r.json() == {"ok": True, "tweet_id": "1", "feedback": "like", "read": True, "liked_on_x": False}
+  c = db.connect(client.db_path)
+  assert db.is_tweet_read(c, "1")
+  assert db.is_tweet_liked(c, "1")
   home = client.get("/")
   assert 'class="tweet tweet-read"' in home.text
-  assert "mark-check is-read" in home.text
+  assert "mark-check is-active" in home.text
   assert "I read this" not in home.text
 
-def test_unmark_tweet_read_json(client):
+def test_dislike_tweet_json_marks_read_and_disliked(client):
   _seed_edition(client.db_path)
-  client.post("/tweets/1/read", data={"read": "true"}, headers={"Accept": "application/json"})
+  r = client.post("/tweets/1/dislike", headers={"Accept": "application/json"})
+  assert r.status_code == 200
+  assert r.json()["feedback"] == "dislike"
+  c = db.connect(client.db_path)
+  assert db.is_tweet_read(c, "1")
+  assert db.is_tweet_disliked(c, "1")
+  assert not db.is_tweet_liked(c, "1")
+  home = client.get("/")
+  assert 'class="tweet tweet-read"' in home.text
+  assert "mark-dislike is-active" in home.text
+
+def test_dislike_clears_prior_like(client):
+  _seed_edition(client.db_path)
+  client.post("/tweets/1/like", headers={"Accept": "application/json"})
+  client.post("/tweets/1/dislike", headers={"Accept": "application/json"})
+  c = db.connect(client.db_path)
+  assert db.is_tweet_disliked(c, "1")
+  assert not db.is_tweet_liked(c, "1")
+
+def test_unmark_tweet_read_clears_feedback(client):
+  _seed_edition(client.db_path)
+  client.post("/tweets/1/like", headers={"Accept": "application/json"})
   r = client.post("/tweets/1/read", data={"read": "false"},
                   headers={"Accept": "application/json"})
   assert r.json()["read"] is False
-  assert not db.is_tweet_read(db.connect(client.db_path), "1")
+  c = db.connect(client.db_path)
+  assert not db.is_tweet_read(c, "1")
+  assert not db.is_tweet_liked(c, "1")
   home = client.get("/")
   assert 'class="tweet tweet-read"' not in home.text
+
+def test_home_tweet_meta_left_x_check_right(client):
+  _seed_edition(client.db_path)
+  r = client.get("/")
+  meta_start = r.text.find('class="meta"')
+  assert meta_start != -1
+  chunk = r.text[meta_start:meta_start + 900]
+  meta_pos = chunk.find("meta-bits")
+  actions_pos = chunk.find("tweet-actions")
+  dislike_pos = chunk.find("mark-dislike")
+  check_pos = chunk.find("mark-check")
+  assert meta_pos != -1 and actions_pos != -1
+  assert meta_pos < actions_pos
+  assert dislike_pos < check_pos
+  assert "order: 2" not in r.text
 
 def test_mark_newsletter_read_json_hides_on_next_load(client):
   aid = _seed_edition(client.db_path)

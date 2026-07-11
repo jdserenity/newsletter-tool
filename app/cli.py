@@ -15,10 +15,8 @@ def db_status():
     o = db.database_overview(conn)
     print(f"Database: {path}")
     print(f"Fetch week: {o['week_start'][:10]} → {o['week_end'][:10]}")
-    pending_follows = o.get("pending_follow_count", 0)
-    follow_bit = f" · {pending_follows} unfollowed" if pending_follows else ""
     print(f"Totals: {o['tweet_count']} tweets · {o['edition_count']} editions · "
-          f"${o['api_cost_usd']:.3f} API · {o['like_queue_size']} queued likes{follow_bit} · "
+          f"${o['api_cost_usd']:.3f} API · "
           f"OAuth {'yes' if o['oauth_signed_in'] else 'no'}")
     active = sum(1 for a in o["accounts"] if a["active"])
     inactive = sum(1 for a in o["accounts"] if not a["active"])
@@ -31,10 +29,8 @@ def db_status():
         ed = f"{a['tweets_in_week']} tweets · {a['edition_items']} in newsletter ({wk})"
       else:
         ed = f"{a['tweets_in_week']} in fetch week · no newsletter"
-      liked = f"{a['liked_count']}/{a['tweet_count']} liked"
-      if a["queued_like_count"]: liked += f" ({a['queued_like_count']} queued)"
-      followed = "followed" if a["followed"] else "not followed"
-      print(f"  @{a['handle']}{name}: {a['tweet_count']} stored · {ed} · {liked} · {followed} · API ${a['total_cost_usd']:.3f}")
+      feedback = f"{a['liked_count']} liked · {a['disliked_count']} disliked"
+      print(f"  @{a['handle']}{name}: {a['tweet_count']} stored · {ed} · {feedback} · API ${a['total_cost_usd']:.3f}")
   finally:
     conn.close()
 
@@ -43,26 +39,16 @@ def dev():
   uvicorn.run("app.main:create_app", factory=True, reload=True)
 
 def fetch():
-  """Fetch last complete week, build newsletters, then drain the like queue (blocking)."""
-  from app import auth, db
+  """Fetch last complete week and build newsletters."""
   from app.fetch.runner import run_weekly_fetch
-  from app.user_actions import UserActionsClient, drain_like_queue
   path, conn = _open_db()
   try:
     print(f"Database: {path}")
-    results = run_weekly_fetch(conn)  # enqueue only; no background thread
-    queued = db.like_queue_size(conn)
+    results = run_weekly_fetch(conn)
     for handle, cost in results:
       print(f"{handle}: ${cost:.3f}")
     if not results:
       print("No active accounts.")
-    elif queued:
-      if not db.get_oauth_session(conn):
-        print(f"{queued} likes queued but OAuth is not saved — sign in via the web app once, then re-run or open the homepage.")
-      else:
-        print(f"Draining {queued} queued likes (paced; may take a while)...")
-        liked = drain_like_queue(conn, auth_config=auth.AuthConfig.from_env(), actions_client=UserActionsClient())
-        print(f"Liked {liked} tweets.")
   finally:
     conn.close()
 

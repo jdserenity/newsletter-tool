@@ -111,15 +111,23 @@
     display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem;
   }
   .tweet .meta-bits { flex: 1 1 auto; min-width: 0; }
-  .mark-check {
-    flex: 0 0 auto; width: auto; height: auto; padding: 0.1rem 0.15rem; margin: 0;
+  .tweet-actions {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 0.25rem;
+  }
+  .mark-check, .mark-dislike {
+    flex: 0 0 auto; width: auto; height: auto; margin: 0;
     border: none; background: transparent; box-shadow: none;
-    color: var(--border); font-size: 1rem; line-height: 1; cursor: pointer;
+    color: var(--border); line-height: 1; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
   }
+  .mark-dislike { padding: 0.1rem 0.08rem 0.1rem 0.15rem; }
+  .mark-check { padding: 0.1rem 0.15rem 0.1rem 0.08rem; }
+  .mark-check { font-size: 1rem; }
   .mark-check::before { content: "✓"; }
-  .mark-check:hover { color: var(--accent); }
-  .mark-check.is-read { color: var(--accent); }
+  .mark-dislike { font-size: 0.9rem; }
+  .mark-dislike::before { content: "X"; }
+  .mark-check:hover, .mark-dislike:hover { color: var(--accent); }
+  .mark-check.is-active, .mark-dislike.is-active { color: var(--accent); }
   .newsletter-footer {
     margin-top: 1.25rem; padding-top: 0.9rem; border-top: 1px solid var(--border);
     display: flex; justify-content: center;
@@ -276,9 +284,9 @@
     .toggle-thumb { width: 24px; height: 24px; }
     .toggle input:checked + .toggle-rail .toggle-thumb { transform: translateX(18px); }
     .newsletter-body { padding: 0.65rem 0.85rem 0.85rem; }
-    .mark-check {
-      min-width: 44px; min-height: 44px; padding: 0.5rem; font-size: 1.15rem;
-    }
+    .mark-check, .mark-dislike { min-height: 44px; }
+    .mark-check { font-size: 1.15rem; }
+    .mark-dislike { font-size: 1rem; }
     .mark-check.mark-check-lg { font-size: 1.45rem; min-width: 48px; min-height: 48px; }
     .add-card { padding: 1.5rem 1rem; }
     .add-row { flex-direction: column; }

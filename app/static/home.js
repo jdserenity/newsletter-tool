@@ -1,10 +1,10 @@
 (function() {
-  // In-place actions (settings, mark read). Full form POSTs used to redirect to /
+  // In-place actions (settings, like/dislike). Full form POSTs used to redirect to /
   // and reload the page, which always reset the carousel to scrollLeft = 0.
 
   function postForm(url, fields) {
     var body = new URLSearchParams();
-    Object.keys(fields).forEach(function(k) { body.set(k, fields[k]); });
+    Object.keys(fields || {}).forEach(function(k) { body.set(k, fields[k]); });
     return fetch(url, {
       method: 'POST', body: body,
       headers: { 'Accept': 'application/json' },
@@ -47,6 +47,29 @@
     footer.classList.toggle('is-top', allRead);
     if (allRead) body.insertBefore(footer, body.firstChild);
     else body.appendChild(footer);
+  }
+
+  function setFeedbackUi(tweet, feedback) {
+    var likeBtn = tweet.querySelector('.mark-check[data-action="like"]');
+    var dislikeBtn = tweet.querySelector('.mark-dislike[data-action="dislike"]');
+    var liked = feedback === 'like';
+    var disliked = feedback === 'dislike';
+    var read = liked || disliked;
+    tweet.classList.toggle('tweet-read', read);
+    if (likeBtn) {
+      likeBtn.classList.toggle('is-active', liked);
+      likeBtn.setAttribute('aria-pressed', liked ? 'true' : 'false');
+      likeBtn.setAttribute('aria-label', liked ? 'Undo like' : 'Like');
+      likeBtn.title = liked ? 'Undo like' : 'Like';
+    }
+    if (dislikeBtn) {
+      dislikeBtn.classList.toggle('is-active', disliked);
+      dislikeBtn.setAttribute('aria-pressed', disliked ? 'true' : 'false');
+      dislikeBtn.setAttribute('aria-label', disliked ? 'Undo dislike' : 'Dislike');
+      dislikeBtn.title = disliked ? 'Undo dislike' : 'Dislike';
+    }
+    sortTweetList(tweet.parentElement);
+    updateNewsletterCheckPosition(tweet.closest('.newsletter-body'));
   }
 
   function setupTextClamp(root) {
@@ -96,7 +119,7 @@
   });
 
   document.addEventListener('click', function(e) {
-    var btn = e.target.closest && e.target.closest('button.mark-check');
+    var btn = e.target.closest && e.target.closest('button.mark-check, button.mark-dislike');
     if (!btn) return;
     e.preventDefault();
 
@@ -115,21 +138,17 @@
     }
 
     var tweetId = btn.getAttribute('data-tweet-id');
-    if (!tweetId) return;
+    var action = btn.getAttribute('data-action');
+    if (!tweetId || !action) return;
     var tweet = btn.closest('.tweet');
-    var nextRead = !btn.classList.contains('is-read');
+    var undo = btn.classList.contains('is-active');
     btn.disabled = true;
-    postForm('/tweets/' + encodeURIComponent(tweetId) + '/read', { read: nextRead ? 'true' : 'false' })
-      .then(function() {
-        btn.classList.toggle('is-read', nextRead);
-        btn.setAttribute('aria-pressed', nextRead ? 'true' : 'false');
-        btn.setAttribute('aria-label', nextRead ? 'Mark as unread' : 'Mark as read');
-        btn.title = nextRead ? 'Mark as unread' : 'Mark as read';
-        if (tweet) {
-          tweet.classList.toggle('tweet-read', nextRead);
-          sortTweetList(tweet.parentElement);
-          updateNewsletterCheckPosition(tweet.closest('.newsletter-body'));
-        }
+    var req;
+    if (undo) req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/read', { read: 'false' });
+    else if (action === 'like') req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/like');
+    else req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/dislike');
+    req.then(function() {
+        if (tweet) setFeedbackUi(tweet, undo ? null : action);
       })
       .finally(function() { btn.disabled = false; });
   });

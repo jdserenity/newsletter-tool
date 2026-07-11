@@ -72,17 +72,14 @@ def repair_missing_editions(conn, now=None):
 
 def run_weekly_fetch(conn, client=None, now=None, db_path=None):
   """Fetch + build newsletters for all active accounts. Returns list of (handle, cost)."""
-  from app.user_actions import enqueue_newsletter_likes, start_like_drain
   client = client or XClient()
   week_start, week_end = week_bounds(now)
   costs = {}
   for account in db.list_accounts(conn):
     costs[account["id"]] = fetch_account_week(conn, client, account, week_start, week_end, now=now)
-  results = []; enqueued = 0
+  results = []
   for account in db.list_accounts(conn):
-    items = build_account_edition(conn, account, week_start, week_end, costs.get(account["id"], 0.0))
-    enqueued += enqueue_newsletter_likes(conn, items)
+    build_account_edition(conn, account, week_start, week_end, costs.get(account["id"], 0.0))
     results.append((account["handle"], costs.get(account["id"], 0.0)))
   _verify_editions(conn, week_start)
-  if db_path and enqueued > 0: start_like_drain(db_path)
   return results
