@@ -14,6 +14,32 @@
       <span class="muted"> API cost this month</span>
     </div>
   </div>
+
+  <h3>Newsletter schedule</h3>
+  <p class="muted">How often to fetch and build a new edition, and what happens to tweets you have not marked read yet.</p>
+  <form method="post" action="/settings" class="card app-settings">
+    <fieldset>
+      <legend>Cadence</legend>
+      <label class="choice">
+        <input type="radio" name="cadence" value="twice_weekly"
+          {% if app_settings.cadence == 'twice_weekly' %}checked{% endif %}>
+        Twice a week (Monday and Thursday)
+      </label>
+      <label class="choice">
+        <input type="radio" name="cadence" value="weekly"
+          {% if app_settings.cadence == 'weekly' %}checked{% endif %}>
+        Once a week (Monday)
+      </label>
+    </fieldset>
+    <label class="choice">
+      <input type="checkbox" name="append_unread" value="true"
+        {% if app_settings.append_unread %}checked{% endif %}>
+      Carry unread tweets into the next newsletter
+    </label>
+    <p class="muted tip">If unchecked, unread tweets from the previous edition are left behind when the next one is built.</p>
+    <button type="submit">Save schedule</button>
+  </form>
+
   <p class="muted">Remove tracked accounts you no longer want newsletters for.</p>
   {% for a in accounts %}  <div class="card row">
     <div>

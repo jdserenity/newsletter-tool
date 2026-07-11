@@ -45,7 +45,7 @@
       </div>
       {% endif %}
       {% if e %}
-      <div class="week-label muted"><span class="text-content">Week of {{ e.week_start[:10] }} · {{ e.item_count }} items · ${{ "%.2f"|format(e.cost_usd) }}</span></div>
+      <div class="week-label muted"><span class="text-content">{{ e.week_start[:10] }} → {{ e.week_end[:10] }} · {{ e.item_count }} items · ${{ "%.2f"|format(e.cost_usd) }}</span></div>
       <div class="tweet-list">
       {% for item in card.entries %}
       {% set is_read = item.tweet_id in card.read_tweet_ids %}

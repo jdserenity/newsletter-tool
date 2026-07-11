@@ -12,11 +12,12 @@ def client(tmp_path):
     yield c
 
 def test_home_builds_newsletter_from_stored_tweets_on_load(client):
-  from app.fetch.runner import week_bounds
+  from app.fetch.runner import period_bounds
   c = db.connect(client.db_path)
   aid = db.add_account(c, "karpathy")
-  ws, we = week_bounds()
-  tweet_at = ws[:11] + "T12:00:00Z"  # mid-week so repair_missing_editions picks it up
+  ws, we = period_bounds(cadence=db.get_app_settings(c)["cadence"])
+  # Mid-period so repair_missing_editions picks it up (ISO date + noon).
+  tweet_at = ws[:10] + "T12:00:00Z"
   db.save_tweets(c, aid, [{"id": "99", "text": "stored tweet", "created_at": tweet_at, "kind": "post"}])
   r = client.get("/")
   assert r.status_code == 200
@@ -90,6 +91,29 @@ def test_settings_shows_month_cost(client):
   r = client.get("/settings")
   assert "$1.25" in r.text
   assert "1" in r.text and "tracked account" in r.text
+
+def test_settings_shows_default_cadence_and_append(client):
+  r = client.get("/settings")
+  assert r.status_code == 200
+  assert "Twice a week" in r.text
+  assert 'name="cadence" value="twice_weekly"' in r.text
+  assert 'checked' in r.text
+  assert "Carry unread tweets" in r.text
+
+def test_settings_save_cadence_and_append(client):
+  r = client.post("/settings", data={"cadence": "weekly"}, follow_redirects=True)
+  assert r.status_code == 200
+  c = db.connect(client.db_path)
+  s = db.get_app_settings(c)
+  assert s["cadence"] == "weekly"
+  assert s["append_unread"] == 0  # checkbox omitted
+  r = client.post("/settings", data={"cadence": "twice_weekly", "append_unread": "true"},
+                  follow_redirects=True)
+  assert r.status_code == 200
+  s = db.get_app_settings(c)
+  assert s["cadence"] == "twice_weekly"
+  assert s["append_unread"] == 1
+  assert 'value="twice_weekly"' in r.text and "checked" in r.text
 
 def test_home_has_favicon(client):
   r = client.get("/")
@@ -249,7 +273,9 @@ def test_rss_feed(client):
   assert r.status_code == 200
   assert "application/rss+xml" in r.headers["content-type"]
   assert "<rss" in r.text; assert "hello world" in r.text
-  assert "week of 2026-06-29" in r.text
+  assert "2026-06-29T00:00:00Z" not in r.text  # ISO not used raw in title
+  assert "2026-06-29" in r.text and "2026-07-06" in r.text
+  assert "week of" not in r.text.lower()
   assert "digest" not in r.text.lower()
   assert "+0000</pubDate>" in r.text or "GMT</pubDate>" in r.text
 

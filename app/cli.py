@@ -43,13 +43,16 @@ def dev():
   uvicorn.run("app.main:create_app", factory=True, reload=True)
 
 def fetch():
-  """Fetch last complete week, build newsletters, then drain the like queue (blocking)."""
+  """Fetch the current cadence period, build newsletters, then drain the like queue (blocking)."""
   from app import auth, db
-  from app.fetch.runner import run_weekly_fetch
+  from app.fetch.runner import period_bounds, run_weekly_fetch
   from app.user_actions import UserActionsClient, drain_like_queue
   path, conn = _open_db()
   try:
     print(f"Database: {path}")
+    settings = db.get_app_settings(conn)
+    start, end = period_bounds(cadence=settings["cadence"])
+    print(f"Cadence: {settings['cadence']} · period {start[:10]} → {end[:10]}")
     results = run_weekly_fetch(conn)  # enqueue only; no background thread
     queued = db.like_queue_size(conn)
     for handle, cost in results:
