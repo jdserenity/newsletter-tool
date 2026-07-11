@@ -46,6 +46,20 @@ def test_default_settings(conn):
   a = db.get_account(conn, account_id=aid)
   assert a["include_quotes"] == 1; assert a["include_replies"] == 0; assert a["include_retweets"] == 0
 
+def test_app_settings_defaults_twice_weekly_and_append(conn):
+  s = db.get_app_settings(conn)
+  assert s["cadence"] == "twice_weekly"
+  assert s["append_unread"] == 1
+
+def test_update_app_settings(conn):
+  db.update_app_settings(conn, cadence="weekly", append_unread=False)
+  s = db.get_app_settings(conn)
+  assert s["cadence"] == "weekly"
+  assert s["append_unread"] == 0
+  db.update_app_settings(conn, cadence="twice_weekly")
+  assert db.get_app_settings(conn)["cadence"] == "twice_weekly"
+  assert db.get_app_settings(conn)["append_unread"] == 0  # unchanged
+
 def test_update_settings(conn):
   aid = db.add_account(conn, "alice")
   db.update_settings(conn, aid, include_quotes=False, include_retweets=True)
