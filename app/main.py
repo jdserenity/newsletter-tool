@@ -125,13 +125,15 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       items = json.loads(edition["content_json"]) if edition else []
       tweet_ids = [i["tweet_id"] for i in items if i.get("tweet_id")]
       read_ids = db.read_tweet_ids(c, tweet_ids)
+      read_times = db.read_tweet_times(c, tweet_ids)
       liked_ids = db.liked_tweet_ids(c, tweet_ids)
       disliked_ids = db.disliked_tweet_ids(c, tweet_ids)
-      items = order_entries_unread_first(items, read_ids)
+      items = order_entries_unread_first(items, read_ids, read_times)
       all_tweets_read = bool(tweet_ids) and all(tid in read_ids for tid in tweet_ids)
       cards.append({
         "account": a, "edition": edition, "entries": items,
         "week_start": week_start, "read_tweet_ids": read_ids,
+        "read_tweet_times": read_times,
         "liked_tweet_ids": liked_ids, "disliked_tweet_ids": disliked_ids,
         "all_tweets_read": all_tweets_read})
     return cards
@@ -250,11 +252,13 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     items = json.loads(edition["content_json"])
     tweet_ids = [i["tweet_id"] for i in items if i.get("tweet_id")]
     read_ids = db.read_tweet_ids(c, tweet_ids)
+    read_times = db.read_tweet_times(c, tweet_ids)
     liked_ids = db.liked_tweet_ids(c, tweet_ids)
     disliked_ids = db.disliked_tweet_ids(c, tweet_ids)
-    items = order_entries_unread_first(items, read_ids)
+    items = order_entries_unread_first(items, read_ids, read_times)
     return render(request, "edition.html", {
       "edition": edition, "items": items, "read_tweet_ids": read_ids,
+      "read_tweet_times": read_times,
       "liked_tweet_ids": liked_ids, "disliked_tweet_ids": disliked_ids})
 
   @app.get("/feeds/{account_id}.xml")

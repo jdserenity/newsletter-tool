@@ -136,3 +136,13 @@ def test_order_entries_unread_first():
   ]
   ordered = order_entries_unread_first(items, {"2"})
   assert [i["tweet_id"] for i in ordered] == ["1", "3", "2"]
+
+def test_order_entries_read_sorted_by_read_at_not_publish_order():
+  items = [
+    {"tweet_id": "1", "created_at": "2026-06-29T10:00:00Z"},
+    {"tweet_id": "2", "created_at": "2026-06-29T11:00:00Z"},
+    {"tweet_id": "3", "created_at": "2026-06-29T12:00:00Z"},
+  ]
+  read_times = {"1": "2026-06-30T13:00:00Z", "3": "2026-06-30T12:00:00Z"}
+  ordered = order_entries_unread_first(items, {"1", "3"}, read_times)
+  assert [i["tweet_id"] for i in ordered] == ["2", "3", "1"]

@@ -413,6 +413,25 @@ def test_home_read_tweets_sorted_to_bottom(client):
   i1, i2, i3 = r.text.find("first"), r.text.find("second"), r.text.find("third")
   assert i1 < i3 < i2  # unread chrono first, then read at bottom
 
+def test_home_read_tweets_sorted_by_read_at_not_publish_order(client):
+  c = db.connect(client.db_path)
+  aid = db.add_account(c, "alice")
+  items = [
+    {"tweet_id": "1", "kind": "post", "text": "first", "created_at": "2026-06-30T10:00:00Z",
+     "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0},
+    {"tweet_id": "2", "kind": "post", "text": "second", "created_at": "2026-06-30T11:00:00Z",
+     "url": "https://x.com/alice/status/2", "likes": 0, "reposts": 0},
+    {"tweet_id": "3", "kind": "post", "text": "third", "created_at": "2026-06-30T12:00:00Z",
+     "url": "https://x.com/alice/status/3", "likes": 0, "reposts": 0},
+  ]
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z", items, 0.01)
+  c.execute("INSERT INTO read_tweets (tweet_id, read_at) VALUES ('3', '2026-06-30T12:00:00Z')")
+  c.execute("INSERT INTO read_tweets (tweet_id, read_at) VALUES ('1', '2026-06-30T13:00:00Z')")
+  c.commit()
+  r = client.get("/")
+  i1, i2, i3 = r.text.find("first"), r.text.find("second"), r.text.find("third")
+  assert i2 < i3 < i1  # unread first, then read by when marked (3 before 1)
+
 def test_newsletter_checkmark_at_bottom_when_unread_tweets(client):
   _seed_edition(client.db_path)
   r = client.get("/")
@@ -458,3 +477,4 @@ def test_home_loads_home_js_for_in_place_actions(client):
   js = client.get("/static/home.js")
   assert js.status_code == 200
   assert "updateNewsletterCheckPosition" in js.text
+  assert "data-read-at" in js.text

@@ -360,7 +360,10 @@ def is_tweet_read(conn, tweet_id):
   return conn.execute("SELECT 1 FROM read_tweets WHERE tweet_id = ?", (tweet_id,)).fetchone() is not None
 
 def mark_tweet_read(conn, tweet_id):
-  conn.execute("INSERT OR IGNORE INTO read_tweets (tweet_id) VALUES (?)", (tweet_id,)); conn.commit()
+  conn.execute(
+    """INSERT INTO read_tweets (tweet_id, read_at) VALUES (?, datetime('now'))
+       ON CONFLICT(tweet_id) DO UPDATE SET read_at = excluded.read_at""",
+    (tweet_id,)); conn.commit()
 
 def mark_tweet_unread(conn, tweet_id):
   conn.execute("DELETE FROM read_tweets WHERE tweet_id = ?", (tweet_id,)); conn.commit()
@@ -375,6 +378,17 @@ def read_tweet_ids(conn, tweet_ids=None):
   else:
     rows = conn.execute("SELECT tweet_id FROM read_tweets").fetchall()
   return {r["tweet_id"] for r in rows}
+
+def read_tweet_times(conn, tweet_ids=None):
+  """Return tweet_id -> read_at for marked-read tweets. Optionally filter to tweet_ids."""
+  if tweet_ids is not None:
+    if not tweet_ids: return {}
+    placeholders = ",".join("?" * len(tweet_ids))
+    rows = conn.execute(
+      f"SELECT tweet_id, read_at FROM read_tweets WHERE tweet_id IN ({placeholders})", tuple(tweet_ids)).fetchall()
+  else:
+    rows = conn.execute("SELECT tweet_id, read_at FROM read_tweets").fetchall()
+  return {r["tweet_id"]: r["read_at"] for r in rows}
 
 # --- read newsletters (hide account card for that week) ---
 

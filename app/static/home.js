@@ -22,6 +22,9 @@
       var ar = a.classList.contains('tweet-read') ? 1 : 0;
       var br = b.classList.contains('tweet-read') ? 1 : 0;
       if (ar !== br) return ar - br;
+      if (ar === 1) {
+        return (a.getAttribute('data-read-at') || '').localeCompare(b.getAttribute('data-read-at') || '');
+      }
       return (a.getAttribute('data-created-at') || '').localeCompare(b.getAttribute('data-created-at') || '');
     });
     tweets.forEach(function(t) { list.appendChild(t); });
@@ -56,6 +59,8 @@
     var disliked = feedback === 'dislike';
     var read = liked || disliked;
     tweet.classList.toggle('tweet-read', read);
+    if (read) tweet.setAttribute('data-read-at', new Date().toISOString());
+    else tweet.removeAttribute('data-read-at');
     if (likeBtn) {
       likeBtn.classList.toggle('is-active', liked);
       likeBtn.setAttribute('aria-pressed', liked ? 'true' : 'false');
