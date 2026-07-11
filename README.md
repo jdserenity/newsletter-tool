@@ -11,7 +11,7 @@ source venv/bin/activate
 news-dev
 ```
 
-Manual weekly fetch (build newsletters + paced likes):
+Manual weekly fetch (build newsletters):
 
 ```bash
 news-manual-fetch
@@ -29,4 +29,4 @@ news-db-status
 pytest
 ```
 
-See `docs/ARCHITECTURE.md` for design details.
+See `scaffold/ARCH-HUMAN.md` for design details.

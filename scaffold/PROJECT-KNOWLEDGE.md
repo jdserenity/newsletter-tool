@@ -41,21 +41,11 @@ Homepage sets `html, body { overflow: hidden }` for the carousel. Overriding **o
 - `SESSION_SECRET` signs the cookie; `openssl rand -hex 32` if you need one.
 - Web tests use `auth_enabled=False`; real auth coverage is `tests/test_auth.py`.
 
-## Follow / like: tokens, limits, queue
-- Drain uses **`oauth_session` in SQLite**, not the browser cookie alone. CLI can enqueue likes with `OAuth no` in `news-db-status` until you sign in once via the web app (homepage bootstraps tokens if missing and resumes the queue).
-- Unfollowed tracked accounts (`followed_at` null) retry in a **background** thread on homepage load (`schedule_owner_maintenance`) and on app startup when OAuth is present — never block `GET /` on X HTTP. Access tokens are reused until near `expires_at`; do not refresh on every page load.
+## Auto-follow / auto-like were removed
+Background follow-on-add and paced like-queue drain never worked reliably (token/queue edge cases). The product now records **local** like/dislike from the newsletter UI (`liked_tweets` / `disliked_tweets`). Do not reintroduce X write API auto-actions without an explicit product decision.
 
 ## Do not put X network on homepage render
-`GET /` used to call `get_valid_access_token` (always hit X token endpoint) and `retry_pending_follows` inline, so Settings → Home felt multi-second even when nothing changed. Keep homepage render local (SQLite + templates). Network owner work belongs in background maintenance or explicit write paths (add account).
-- POST follow directly (no “already following?” list crawl) — cheaper and enough for re-follow.
-- Published per-user rate limits (X docs, 2026; confirm in Developer Console for pay-per-use):
-
-  | Action | Endpoint | Pro | Basic |
-  | --- | --- | --- | --- |
-  | Follow | `POST /2/users/:id/following` | 50 / 15 min | 5 / 15 min |
-  | Like | `POST /2/users/:id/likes` | 1000 / 24 h | 200 / 24 h |
-
-  429 responses expose `x-rate-limit-remaining` / `x-rate-limit-reset`. X guidelines want likes user-initiated; this app only likes items for accounts the owner chose to track — still pace conservatively (first like immediate, then ~60s ±1–20s).
+`GET /` must stay local (SQLite + templates). It may copy OAuth tokens from the browser session into `oauth_session`, but must not call X HTTP for token refresh, follows, or likes during the page response.
 
 ## CLI entry points missing after pull
 If `news-manual-fetch` / `news-db-status` / `news-dev` are not found: re-run `./scripts/setup.sh` or `pip install -e .`.
