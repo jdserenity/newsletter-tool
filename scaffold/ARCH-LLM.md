@@ -27,7 +27,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 | `app/newsletter.py` | Pure: tweets + settings → edition items; unread-first sort; media/quote shaping |
 | `app/rss.py` | RSS XML from editions (no X API) |
 | `app/auth.py` | OAuth2 PKCE, session, `RequireAuthMiddleware`, public prefixes |
-| `app/user_actions.py` | Stub; auto-follow/auto-like removed |
+| `app/user_actions.py` | Owner like/unlike on X (checkmark click) |
 | `app/scheduler.py` | Weekly job Mon 06:00 UTC; `run_job()` for manual |
 | `app/fetch/client.py` | X API v2 client (bearer) |
 | `app/fetch/runner.py` | Weekly fetch window, store tweets, build editions |
@@ -68,7 +68,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 
 ## UI behavior
 - **Out-links** (X profile/tweet/media, RSS): `target="_blank" rel="noopener noreferrer"`. In-app nav same tab.
-- **Tweet like/dislike:** meta row has ✓ on the **left** edge and × on the **right** (meta bits in the middle). Check → like (`liked_tweets`); × → dislike (`disliked_tweets`, bucket for later LLM category-exclusion; LLM not built yet). Both mark read. Re-click active control → clear + unread. Dim + sort bottom (unread first, chrono within group). No auto-follow or auto-like via the X API.
+- **Tweet like/dislike:** meta row has ✓ on the **left** edge and × on the **right** (meta bits in the middle). Check → like on X (`POST /2/users/:id/likes` via owner OAuth) + `liked_tweets` + mark read. × → dislike (`disliked_tweets` only; no X call). Re-click active control → unlike on X (if liked) + clear + unread. Dim + sort bottom (unread first, chrono within group). User-initiated on click — no background like queue.
 - **Newsletter mark-read:** ✓ on every card (incl. empty / no edition). Bottom while any unread; **top** of body when all tweets read (empty stays bottom). `read_newsletters(account_id, week_start)` → card gone for that week.
 - **In-place actions:** settings toggles + like/dislike via `fetch` + JSON (`home.js`). No full-page POST/redirect (would reset carousel scrollLeft).
 - **Long text:** fetch requests `note_tweet`; UI clamps 8 lines + More/Less.
@@ -79,7 +79,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 ## X API
 - Pay-per-use (~2026-07): ~$0.005/post read, ~$0.010/user read; post reads cap 2M/mo. X dedupes same resource within 24h; app mirrors when recording tweet-read costs.
 - **App bearer** `X_BEARER_TOKEN`: weekly fetch + estimates (not user session).
-- **User OAuth** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET`. Scopes default: `users.read tweet.read offline.access` (`X_OAUTH_SCOPES` override). Used for web sign-in; not for auto like/follow.
+- **User OAuth** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET`. Scopes default: `users.read tweet.read like.write offline.access` (`X_OAUTH_SCOPES` override). Sign-in + checkmark likes use owner session token (`owner_access_token`).
 - **Fetch:** settings exclude replies/retweets at API when off. Quotes always fetched; filtered in builder if `include_quotes` off. Fields include `note_tweet`, media keys, `referenced_tweets.id` (quoted posts extra post reads). Media on `raw_json`; photos inline; video/GIF thumb → X. Media `t.co` stripped at build. `api_calls.units` = timeline tweets + expanded referenced IDs per page.
 - Week window: `week_bounds()` = most recent complete Mon–Mon UTC (`app/fetch/runner.py`).
 

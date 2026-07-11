@@ -29,7 +29,7 @@ Not email. Not multi-user. Hosted on your VPS as a subdomain.
 | **Edition** `/editions/{id}` | Single week for RSS deep links (public). Like/dislike only if signed in. |
 | **RSS** `/feeds/{id}.xml` | Public feed per account (no login cookie). |
 
-**Reading flow:** each tweet has a checkmark on the **left** (like) and an × on the **right** (dislike). Either one marks the tweet read — it dims and sinks to the bottom. Liked and disliked tweets are stored separately; disliked ones are a bucket for later “what categories to skip” suggestions. When every tweet is handled, the big newsletter checkmark moves to the **top** of the card so you can dismiss the whole week without scrolling. Empty weeks keep that checkmark at the bottom.
+**Reading flow:** each tweet has a checkmark on the **left** (like on X when you click it) and an × on the **right** (dislike — local only, for later category suggestions). Either one marks the tweet read — it dims and sinks to the bottom. Re-clicking undoes it (and unlikes on X if you had liked). When every tweet is handled, the big newsletter checkmark moves to the **top** of the card so you can dismiss the whole week without scrolling. Empty weeks keep that checkmark at the bottom.
 
 **Carousel:** scroll sideways between accounts; scroll inside a card for long weeks. Toolbar toggles and like/dislike save in place (no full page reload). On a phone, each card is nearly full-screen width with snap-between-cards scrolling; the tall desktop toolbar stacks so toggles stay tappable.
 
@@ -56,7 +56,7 @@ One Python **FastAPI** app does everything: pages, RSS, weekly fetch.
 ## Credentials (two kinds)
 
 1. **App token** (`X_BEARER_TOKEN`) — weekly fetch and estimates; not “you” as a user.
-2. **Your X login** (OAuth client id/secret, callback URL, session secret) — web UI sign-in only (not auto like/follow).
+2. **Your X login** (OAuth client id/secret, callback URL, session secret) — web sign-in; checkmark uses it to like tweets on X when you click.
 
 ## Run it
 

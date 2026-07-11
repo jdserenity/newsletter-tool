@@ -42,7 +42,7 @@ Homepage sets `html, body { overflow: hidden }` for the carousel. Overriding **o
 - Web tests use `auth_enabled=False`; real auth coverage is `tests/test_auth.py`.
 
 ## Auto-follow / auto-like were removed
-Background follow-on-add and paced like-queue drain never worked reliably (token/queue edge cases). The product now records **local** like/dislike from the newsletter UI (`liked_tweets` / `disliked_tweets`). Do not reintroduce X write API auto-actions without an explicit product decision.
+Background follow-on-add and paced like-queue drain never worked reliably (token/queue edge cases, silent failures). Likes now happen **only when you click the checkmark**: the app calls X immediately with your signed-in OAuth token (`like.write` scope). Dislikes stay local (`disliked_tweets`). If likes still fail after re-signing in, check the X Developer Console app has **like** permission and OAuth 2.0 scopes include `like.write`.
 
 ## Do not put X network on homepage render
 `GET /` must stay local (SQLite + templates). It may copy OAuth tokens from the browser session into `oauth_session`, but must not call X HTTP for token refresh, follows, or likes during the page response.
