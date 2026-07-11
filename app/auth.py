@@ -16,8 +16,8 @@ USER_ME_URL = "https://api.x.com/2/users/me"
 # Refresh a bit before X says the access token dies so we don't use one mid-request.
 TOKEN_REFRESH_SKEW_SECONDS = 120
 
-# Scopes for sign-in plus like/follow actions on newsletter content.
-DEFAULT_SCOPES = ("users.read", "tweet.read", "like.write", "follows.write", "offline.access")
+# Scopes for sign-in. like.write / follows.write were for removed auto actions.
+DEFAULT_SCOPES = ("users.read", "tweet.read", "offline.access")
 
 SESSION_ACCESS = "access_token"
 SESSION_REFRESH = "refresh_token"

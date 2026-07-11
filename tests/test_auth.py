@@ -128,11 +128,7 @@ def test_callback_exchanges_code_and_sets_session(auth_client, monkeypatch):
   assert ">Home</a>" in r.text
   assert ">Settings</a>" not in r.text
 
-def test_add_account_follows_from_owner_session(auth_client, monkeypatch):
-  follow_calls = []
-  def fake_follow(conn, actions_client, access_token, owner_user_id, account, read_client=None):
-    follow_calls.append((access_token, owner_user_id, account["handle"]))
-  monkeypatch.setattr("app.main.follow_tracked_account", fake_follow)
+def test_add_account_does_not_auto_follow(auth_client, monkeypatch):
   monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
     "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "user-at", "refresh_token": "user-rt"})
@@ -141,47 +137,22 @@ def test_add_account_follows_from_owner_session(auth_client, monkeypatch):
   state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
   auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
   auth_client.post("/accounts", data={"handle": "newvoice"}, follow_redirects=True)
-  assert follow_calls == [("user-at", "99", "newvoice")]
+  c = db.connect(auth_client.app.state.db_path)
+  account = db.get_account(c, handle="newvoice")
+  assert account is not None
+  assert account.get("followed_at") is None
 
-def test_home_persists_oauth_and_resumes_like_drain(auth_client, monkeypatch):
+def test_home_persists_oauth_session(auth_client, monkeypatch):
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {
     "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
   monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "99", "username": "owner", "name": "Owner"})
-  monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
-    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
   login = auth_client.get("/auth/login/start", follow_redirects=False)
   state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
   auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
-  c = db.connect(auth_client.app.state.db_path)
-  db.enqueue_like(c, "42")
-  started = []
-  scheduled = []
-  monkeypatch.setattr("app.main.resume_like_drain_if_needed", lambda p: started.append(p))
-  monkeypatch.setattr("app.main.schedule_owner_maintenance", lambda p, cfg=None: scheduled.append(p))
   auth_client.get("/")
-  row = db.get_oauth_session(c)
+  row = db.get_oauth_session(db.connect(auth_client.app.state.db_path))
   assert row["refresh_token"] == "user-rt"
-  assert started == [auth_client.app.state.db_path]
-  # Network-heavy follow/token work is scheduled, not done inline on GET /.
-  assert scheduled == [auth_client.app.state.db_path]
-
-def test_home_schedules_pending_follow_retry_off_request(auth_client, monkeypatch):
-  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {
-    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
-  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "99", "username": "owner", "name": "Owner"})
-  login = auth_client.get("/auth/login/start", follow_redirects=False)
-  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
-  auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
-  c = db.connect(auth_client.app.state.db_path)
-  aid = db.add_account(c, "pending"); db.set_account_identity(c, aid, "111", "Pending")
-  scheduled = []; retried = []
-  monkeypatch.setattr("app.main.schedule_owner_maintenance", lambda p, cfg=None: scheduled.append(p))
-  monkeypatch.setattr("app.main.retry_pending_follows", lambda *a, **k: retried.append("sync") or 1)
-  monkeypatch.setattr("app.main.resume_like_drain_if_needed", lambda p: None)
-  r = auth_client.get("/")
-  assert r.status_code == 200
-  assert scheduled == [auth_client.app.state.db_path]
-  assert retried == []  # must not block the homepage response on follow retries
+  assert row["access_token"] == "user-at"
 
 def test_logout_clears_session(auth_client, monkeypatch):
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "at", "refresh_token": "rt"})

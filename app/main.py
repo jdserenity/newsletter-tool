@@ -15,10 +15,6 @@ from starlette.middleware.sessions import SessionMiddleware
 from app import auth, db
 from app.fetch.runner import repair_missing_editions
 from app.scheduler import start_scheduler
-from app.user_actions import (
-  UserActionsClient, follow_tracked_account, resume_like_drain_if_needed,
-  retry_pending_follows, retry_pending_follows_on_startup, schedule_owner_maintenance,
-)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -33,8 +29,6 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   @asynccontextmanager
   async def lifespan(app):
     scheduler = start_scheduler(path) if with_scheduler else None
-    resume_like_drain_if_needed(path)
-    retry_pending_follows_on_startup(path)
     yield
     if scheduler: scheduler.shutdown(wait=False)
 
@@ -54,20 +48,10 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     if auth_config.enabled: ctx["user"] = auth.session_user(request)
     return templates.TemplateResponse(request, name, ctx)
 
-  def after_authenticated_request(c, request: Request, *, defer_network=False):
-    """Local session bootstrap + like-queue resume; optional background follow/token work.
-
-    Home uses defer_network=True so GET / only touches SQLite before rendering.
-    Token refresh and pending follows talk to X and must not block the HTML response.
-    """
+  def after_authenticated_request(c, request: Request):
+    """Persist OAuth tokens from the browser session into SQLite when present."""
     if not auth_config.enabled: return
     auth.persist_session_oauth(c, request)
-    resume_like_drain_if_needed(path)  # local check; drain itself is a background thread
-    if defer_network:
-      schedule_owner_maintenance(path, auth_config)
-      return
-    token, owner_id = auth.owner_access_token(c, request, auth_config)
-    if token and owner_id: retry_pending_follows(c, token, owner_id)
 
   if auth_config.enabled:
     @app.get("/auth/login", response_class=HTMLResponse)
@@ -135,7 +119,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   def home(request: Request):
     c = conn()
     repair_missing_editions(c)  # local only — no X API
-    after_authenticated_request(c, request, defer_network=True)
+    after_authenticated_request(c, request)
     return render(request, "home.html", {"cards": newsletter_cards(c)})
 
   @app.get("/settings", response_class=HTMLResponse)
@@ -155,10 +139,6 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     try: account_id = db.add_account(c, handle)
     except Exception: pass  # duplicate handle: just return to the list
     if account_id and auth_config.enabled:
-      token, owner_id = auth.owner_access_token(c, request, auth_config)
-      if token and owner_id:
-        account = db.get_account(c, account_id=account_id)
-        follow_tracked_account(c, UserActionsClient(), token, owner_id, account)
       after_authenticated_request(c, request)
     return RedirectResponse("/", status_code=303)
 
