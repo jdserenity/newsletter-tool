@@ -338,21 +338,18 @@ def test_unmark_tweet_read_clears_feedback(client):
   home = client.get("/")
   assert 'class="tweet tweet-read"' not in home.text
 
-def test_home_tweet_actions_are_left_check_right_dislike(client):
+def test_home_tweet_actions_grouped_on_desktop_separated_on_mobile_css(client):
   _seed_edition(client.db_path)
   r = client.get("/")
-  meta_start = r.text.find('class="meta"')
-  assert meta_start != -1
-  chunk = r.text[meta_start:meta_start + 900]
+  assert 'class="tweet-actions"' in r.text
+  meta_start = r.text.find('class="tweet-actions"')
+  chunk = r.text[meta_start:meta_start + 500]
   check_pos = chunk.find("mark-check")
   dislike_pos = chunk.find("mark-dislike")
+  meta_pos = r.text.find('class="meta-bits"', meta_start)
   assert check_pos != -1 and dislike_pos != -1
-  assert check_pos < dislike_pos
-  assert chunk.find("meta-bits") > check_pos
-  assert chunk.find("meta-bits") < dislike_pos
-  js = client.get("/static/home.js")
-  assert "/like" in js.text and "/dislike" in js.text
-  assert "mark-dislike" in js.text
+  assert check_pos < dislike_pos < meta_pos  # desktop markup: ✓ X together, then meta
+  assert "display: contents" in r.text and "grid-template-columns: auto 1fr auto" in r.text
 
 def test_mark_newsletter_read_json_hides_on_next_load(client):
   aid = _seed_edition(client.db_path)

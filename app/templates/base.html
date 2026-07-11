@@ -111,6 +111,9 @@
     display: flex; flex-wrap: nowrap; align-items: center; gap: 0.35rem 0.5rem;
   }
   .tweet .meta-bits { flex: 1 1 auto; min-width: 0; }
+  .tweet-actions {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 0.1rem;
+  }
   .mark-check, .mark-dislike {
     flex: 0 0 auto; width: auto; height: auto; padding: 0.1rem 0.15rem; margin: 0;
     border: none; background: transparent; box-shadow: none;
@@ -279,6 +282,13 @@
     .toggle-thumb { width: 24px; height: 24px; }
     .toggle input:checked + .toggle-rail .toggle-thumb { transform: translateX(18px); }
     .newsletter-body { padding: 0.65rem 0.85rem 0.85rem; }
+    .tweet .meta {
+      display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+    }
+    .tweet-actions { display: contents; }
+    .tweet .mark-check { grid-column: 1; }
+    .tweet .meta-bits { grid-column: 2; }
+    .tweet .mark-dislike { grid-column: 3; }
     .mark-check, .mark-dislike {
       min-width: 44px; min-height: 44px; padding: 0.5rem;
     }

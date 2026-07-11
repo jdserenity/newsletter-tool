@@ -31,11 +31,18 @@
         {{ quoted_block(item.quoted) }}
         <div class="meta">
           {% if user %}
+          <div class="tweet-actions">
           <button type="button" class="mark-check{% if is_liked %} is-active{% endif %}"
             data-tweet-id="{{ item.tweet_id }}" data-action="like"
             aria-pressed="{{ 'true' if is_liked else 'false' }}"
             aria-label="{{ 'Undo like' if is_liked else 'Like' }}"
             title="{{ 'Undo like' if is_liked else 'Like' }}"></button>
+          <button type="button" class="mark-dislike{% if is_disliked %} is-active{% endif %}"
+            data-tweet-id="{{ item.tweet_id }}" data-action="dislike"
+            aria-pressed="{{ 'true' if is_disliked else 'false' }}"
+            aria-label="{{ 'Undo dislike' if is_disliked else 'Dislike' }}"
+            title="{{ 'Undo dislike' if is_disliked else 'Dislike' }}"></button>
+          </div>
           {% endif %}
           <span class="meta-bits">
             <span class="pill">{{ item.kind }}</span>
@@ -43,13 +50,6 @@
             {{ item.likes }} likes · {{ item.reposts }} reposts ·
             <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">view on X</a>
           </span>
-          {% if user %}
-          <button type="button" class="mark-dislike{% if is_disliked %} is-active{% endif %}"
-            data-tweet-id="{{ item.tweet_id }}" data-action="dislike"
-            aria-pressed="{{ 'true' if is_disliked else 'false' }}"
-            aria-label="{{ 'Undo dislike' if is_disliked else 'Dislike' }}"
-            title="{{ 'Undo dislike' if is_disliked else 'Dislike' }}"></button>
-          {% endif %}
         </div>
       </div>
       {% else %}

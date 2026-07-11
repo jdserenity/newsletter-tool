@@ -68,7 +68,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 
 ## UI behavior
 - **Out-links** (X profile/tweet/media, RSS): `target="_blank" rel="noopener noreferrer"`. In-app nav same tab.
-- **Tweet like/dislike:** meta row has ✓ on the **left** edge and × on the **right** (meta bits in the middle). Check → like on X (`POST /2/users/:id/likes` via owner OAuth) + `liked_tweets` + mark read. × → dislike (`disliked_tweets` only; no X call). Re-click active control → unlike on X (if liked) + clear + unread. Dim + sort bottom (unread first, chrono within group). User-initiated on click — no background like queue.
+- **Tweet like/dislike:** desktop — ✓ and X grouped side by side (left of meta row). Mobile (≤700px) — ✓ left edge, X right edge, meta between. Check → like on X (`POST /2/users/:id/likes`) + `liked_tweets` + mark read. X → `disliked_tweets` only. Re-click → unlike on X (if liked) + clear + unread. Dim + sort bottom.
 - **Newsletter mark-read:** ✓ on every card (incl. empty / no edition). Bottom while any unread; **top** of body when all tweets read (empty stays bottom). `read_newsletters(account_id, week_start)` → card gone for that week.
 - **In-place actions:** settings toggles + like/dislike via `fetch` + JSON (`home.js`). No full-page POST/redirect (would reset carousel scrollLeft).
 - **Long text:** fetch requests `note_tweet`; UI clamps 8 lines + More/Less.
