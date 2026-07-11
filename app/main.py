@@ -107,11 +107,14 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       items = json.loads(edition["content_json"]) if edition else []
       tweet_ids = [i["tweet_id"] for i in items if i.get("tweet_id")]
       read_ids = db.read_tweet_ids(c, tweet_ids)
+      liked_ids = db.liked_tweet_ids(c, tweet_ids)
+      disliked_ids = db.disliked_tweet_ids(c, tweet_ids)
       items = order_entries_unread_first(items, read_ids)
       all_tweets_read = bool(tweet_ids) and all(tid in read_ids for tid in tweet_ids)
       cards.append({
         "account": a, "edition": edition, "entries": items,
         "week_start": week_start, "read_tweet_ids": read_ids,
+        "liked_tweet_ids": liked_ids, "disliked_tweet_ids": disliked_ids,
         "all_tweets_read": all_tweets_read})
     return cards
 
@@ -179,13 +182,31 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
         "include_retweets": include_retweets})
     return RedirectResponse("/", status_code=303)
 
+  @app.post("/tweets/{tweet_id}/like")
+  def like_tweet(request: Request, tweet_id: str):
+    c = conn()
+    db.like_tweet(c, tweet_id)
+    if "application/json" in request.headers.get("accept", ""):
+      return JSONResponse({"ok": True, "tweet_id": tweet_id, "feedback": "like", "read": True})
+    return RedirectResponse("/", status_code=303)
+
+  @app.post("/tweets/{tweet_id}/dislike")
+  def dislike_tweet(request: Request, tweet_id: str):
+    c = conn()
+    db.dislike_tweet(c, tweet_id)
+    if "application/json" in request.headers.get("accept", ""):
+      return JSONResponse({"ok": True, "tweet_id": tweet_id, "feedback": "dislike", "read": True})
+    return RedirectResponse("/", status_code=303)
+
   @app.post("/tweets/{tweet_id}/read")
   def set_tweet_read(request: Request, tweet_id: str, read: bool = Form(False)):
+    """read=true likes (checkmark); read=false clears like/dislike and marks unread."""
     c = conn()
-    if read: db.mark_tweet_read(c, tweet_id)
-    else: db.mark_tweet_unread(c, tweet_id)
+    if read: db.like_tweet(c, tweet_id)
+    else: db.clear_tweet_feedback(c, tweet_id)
     if "application/json" in request.headers.get("accept", ""):
-      return JSONResponse({"ok": True, "tweet_id": tweet_id, "read": read})
+      return JSONResponse({"ok": True, "tweet_id": tweet_id, "read": read,
+        "feedback": "like" if read else None})
     return RedirectResponse("/", status_code=303)
 
   @app.post("/accounts/{account_id}/read-newsletter")
@@ -207,9 +228,12 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     items = json.loads(edition["content_json"])
     tweet_ids = [i["tweet_id"] for i in items if i.get("tweet_id")]
     read_ids = db.read_tweet_ids(c, tweet_ids)
+    liked_ids = db.liked_tweet_ids(c, tweet_ids)
+    disliked_ids = db.disliked_tweet_ids(c, tweet_ids)
     items = order_entries_unread_first(items, read_ids)
     return render(request, "edition.html", {
-      "edition": edition, "items": items, "read_tweet_ids": read_ids})
+      "edition": edition, "items": items, "read_tweet_ids": read_ids,
+      "liked_tweet_ids": liked_ids, "disliked_tweet_ids": disliked_ids})
 
   @app.get("/feeds/{account_id}.xml")
   def account_feed(request: Request, account_id: int):
