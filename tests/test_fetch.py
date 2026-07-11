@@ -5,11 +5,16 @@ from app import db
 from app.fetch.client import (
   XClient, classify_tweet, COST_PER_POST_READ, COST_PER_USER_READ,
   attach_media, attach_quoted, count_post_reads)
-from app.fetch.runner import fetch_account_week, repair_missing_editions, run_weekly_fetch, week_bounds
+from app.fetch.runner import (
+  fetch_account_week, period_bounds, repair_missing_editions, run_weekly_fetch, week_bounds)
 
 class FakeResponse:
-  def __init__(self, body): self.body = body
-  def raise_for_status(self): pass
+  def __init__(self, body, status_code=200):
+    self.body = body; self.status_code = status_code; self.headers = {}
+  def raise_for_status(self):
+    if self.status_code >= 400:
+      import httpx
+      raise httpx.HTTPStatusError("err", request=httpx.Request("GET", "https://api.x.com/2/x"), response=self)
   def json(self): return self.body
 
 class FakeHttp:
@@ -96,6 +101,7 @@ def test_fetch_records_cost_and_stores_tweets(conn):
   assert db.get_account(conn, account_id=aid)["x_user_id"] == "111"
 
 def test_run_weekly_fetch_builds_newsletters(conn):
+  db.update_app_settings(conn, cadence="weekly")
   db.add_account(conn, "alice")
   client = XClient(bearer_token="t", http=FakeHttp(TWEETS, QUOTED_INCLUDES))
   now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
@@ -105,6 +111,7 @@ def test_run_weekly_fetch_builds_newsletters(conn):
   assert len(editions) == 1; assert editions[0]["item_count"] == 2
 
 def test_run_weekly_fetch_builds_without_like_queue(conn):
+  db.update_app_settings(conn, cadence="weekly")
   db.add_account(conn, "alice")
   client = XClient(bearer_token="t", http=FakeHttp(TWEETS))
   now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
@@ -114,6 +121,7 @@ def test_run_weekly_fetch_builds_without_like_queue(conn):
   assert editions[0]["item_count"] == 2
 
 def test_run_weekly_fetch_builds_newsletter_for_every_account(conn):
+  db.update_app_settings(conn, cadence="weekly")
   db.add_account(conn, "alice")
   db.add_account(conn, "bob")
   client = XClient(bearer_token="t", http=FakeHttp(TWEETS))
@@ -126,6 +134,7 @@ def test_run_weekly_fetch_builds_newsletter_for_every_account(conn):
     assert db.edition_for_week(conn, account["id"], ws) is not None
 
 def test_repair_missing_editions_builds_from_stored_tweets(conn):
+  db.update_app_settings(conn, cadence="weekly")
   aid = db.add_account(conn, "alice")
   db.save_tweets(conn, aid, [{"id": "1", "text": "hi", "created_at": "2026-06-23T12:00:00Z", "kind": "post"}])
   now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)
@@ -133,11 +142,13 @@ def test_repair_missing_editions_builds_from_stored_tweets(conn):
   assert db.edition_for_week(conn, aid, "2026-06-22T00:00:00Z")["item_count"] == 1
 
 def test_repair_missing_editions_skips_when_no_tweets(conn):
+  db.update_app_settings(conn, cadence="weekly")
   db.add_account(conn, "alice")
   now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)
   assert repair_missing_editions(conn, now=now) == []
 
 def test_run_weekly_fetch_raises_if_edition_missing(conn, monkeypatch):
+  db.update_app_settings(conn, cadence="weekly")
   db.add_account(conn, "alice")
   client = XClient(bearer_token="t", http=FakeHttp(TWEETS))
   now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
@@ -150,6 +161,83 @@ def test_week_bounds_is_last_complete_monday_week():
   now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)
   start, end = week_bounds(now)
   assert start == "2026-06-22T00:00:00Z"; assert end == "2026-06-29T00:00:00Z"
+
+def test_period_bounds_weekly_matches_week_bounds():
+  now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)
+  assert period_bounds(now, "weekly") == week_bounds(now)
+
+def test_period_bounds_twice_weekly_mon_to_thu_midweek():
+  # Sunday Jul 5 -> most recent complete period ended Thu Jul 2: Mon Jun 29 -> Thu Jul 2
+  now = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)
+  start, end = period_bounds(now, "twice_weekly")
+  assert start == "2026-06-29T00:00:00Z"; assert end == "2026-07-02T00:00:00Z"
+
+def test_period_bounds_twice_weekly_thu_to_mon():
+  # Tuesday Jul 7 -> most recent complete period ended Mon Jul 6: Thu Jul 2 -> Mon Jul 6
+  now = datetime(2026, 7, 7, 12, 0, tzinfo=timezone.utc)
+  start, end = period_bounds(now, "twice_weekly")
+  assert start == "2026-07-02T00:00:00Z"; assert end == "2026-07-06T00:00:00Z"
+
+def test_period_bounds_twice_weekly_mon_to_thu():
+  # Friday Jul 10 -> most recent complete period ended Thu Jul 9: Mon Jul 6 -> Thu Jul 9
+  now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+  start, end = period_bounds(now, "twice_weekly")
+  assert start == "2026-07-06T00:00:00Z"; assert end == "2026-07-09T00:00:00Z"
+
+def test_period_bounds_twice_weekly_on_thursday_morning():
+  now = datetime(2026, 7, 9, 6, 0, tzinfo=timezone.utc)  # Thu
+  start, end = period_bounds(now, "twice_weekly")
+  assert start == "2026-07-06T00:00:00Z"; assert end == "2026-07-09T00:00:00Z"
+
+def test_run_fetch_uses_twice_weekly_period_by_default(conn):
+  # Default cadence is twice_weekly. Fri Jul 10 → Mon Jul 6 – Thu Jul 9.
+  midweek = [
+    {"id": "1", "text": "tue", "created_at": "2026-07-07T10:00:00Z"},
+    {"id": "2", "text": "wed", "created_at": "2026-07-08T10:00:00Z"},
+  ]
+  db.add_account(conn, "alice")
+  client = XClient(bearer_token="t", http=FakeHttp(midweek))
+  now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+  run_weekly_fetch(conn, client=client, now=now)
+  editions = db.list_editions(conn)
+  assert len(editions) == 1
+  assert editions[0]["week_start"] == "2026-07-06T00:00:00Z"
+  assert editions[0]["week_end"] == "2026-07-09T00:00:00Z"
+  assert editions[0]["item_count"] == 2
+
+
+def test_build_appends_unread_from_previous_edition_by_default(conn):
+  from app.fetch.runner import build_account_edition
+  aid = db.add_account(conn, "alice")
+  account = db.get_account(conn, account_id=aid)
+  # Previous Thu-Mon edition with two tweets; mark one read.
+  db.save_tweets(conn, aid, [
+    {"id": "old1", "text": "unread carry", "created_at": "2026-07-03T10:00:00Z", "kind": "post"},
+    {"id": "old2", "text": "already read", "created_at": "2026-07-04T10:00:00Z", "kind": "post"},
+  ])
+  build_account_edition(conn, account, "2026-07-02T00:00:00Z", "2026-07-06T00:00:00Z")
+  db.mark_tweet_read(conn, "old2")
+  # New period tweets Mon-Thu
+  db.save_tweets(conn, aid, [
+    {"id": "new1", "text": "fresh", "created_at": "2026-07-07T10:00:00Z", "kind": "post"},
+  ])
+  items = build_account_edition(conn, account, "2026-07-06T00:00:00Z", "2026-07-09T00:00:00Z")
+  assert [i["tweet_id"] for i in items] == ["old1", "new1"]
+
+def test_build_wipes_unread_when_append_off(conn):
+  from app.fetch.runner import build_account_edition
+  db.update_app_settings(conn, append_unread=False)
+  aid = db.add_account(conn, "alice")
+  account = db.get_account(conn, account_id=aid)
+  db.save_tweets(conn, aid, [
+    {"id": "old1", "text": "unread left behind", "created_at": "2026-07-03T10:00:00Z", "kind": "post"},
+  ])
+  build_account_edition(conn, account, "2026-07-02T00:00:00Z", "2026-07-06T00:00:00Z")
+  db.save_tweets(conn, aid, [
+    {"id": "new1", "text": "fresh", "created_at": "2026-07-07T10:00:00Z", "kind": "post"},
+  ])
+  items = build_account_edition(conn, account, "2026-07-06T00:00:00Z", "2026-07-09T00:00:00Z")
+  assert [i["tweet_id"] for i in items] == ["new1"]
 
 def test_second_fetch_within_24h_dedupes_post_read_cost(conn):
   aid = db.add_account(conn, "alice")
@@ -188,3 +276,87 @@ def test_fetch_rebills_tweets_after_24h_window(conn):
   account = db.get_account(conn, account_id=aid)
   cost = fetch_account_week(conn, client, account, *week, now=now + timedelta(hours=25))
   assert abs(cost - 2 * COST_PER_POST_READ) < 1e-9
+
+
+def test_get_user_tweets_retries_503_then_succeeds():
+  import httpx
+  class SeqHttp:
+    def __init__(self):
+      self.n = 0; self.requests = []; self.sleeps = []
+    def get(self, path, params=None):
+      self.requests.append((path, params or {})); self.n += 1
+      req = httpx.Request("GET", "https://api.x.com/2/x")
+      if self.n < 3:
+        return httpx.Response(503, request=req)
+      return httpx.Response(200, json={"data": [TWEETS[0]], "meta": {}}, request=req)
+  http = SeqHttp()
+  client = XClient(bearer_token="t", http=http, sleep=http.sleeps.append)
+  tweets, _, _ = client.get_user_tweets("111", "2026-07-06T00:00:00Z", "2026-07-09T00:00:00Z",
+                                        include_replies=False, include_retweets=False)
+  assert len(tweets) == 1
+  assert len(http.requests) == 3
+  assert http.sleeps == [2.0, 4.0]
+
+def test_get_user_tweets_gives_up_after_retries():
+  import httpx, pytest
+  class Always503:
+    def __init__(self): self.n = 0
+    def get(self, path, params=None):
+      self.n += 1
+      return httpx.Response(503, request=httpx.Request("GET", "https://api.x.com/2/x"))
+  http = Always503()
+  client = XClient(bearer_token="t", http=http, sleep=lambda s: None, max_retries=2)
+  with pytest.raises(httpx.HTTPStatusError):
+    client.get_user_tweets("111", "2026-07-06T00:00:00Z", "2026-07-09T00:00:00Z",
+                           include_replies=False, include_retweets=False)
+  assert http.n == 3  # initial + 2 retries
+
+def test_run_weekly_fetch_continues_when_one_account_fails(conn, capsys):
+  import httpx
+  db.update_app_settings(conn, cadence="weekly")
+  db.add_account(conn, "alice")
+  db.add_account(conn, "bob")
+  db.set_account_identity(conn, db.get_account(conn, handle="alice")["id"], "111", "Alice")
+  db.set_account_identity(conn, db.get_account(conn, handle="bob")["id"], "222", "Bob")
+
+  class MixedHttp:
+    def get(self, path, params=None):
+      req = httpx.Request("GET", "https://api.x.com/2/x")
+      if "/222/" in path:
+        return httpx.Response(503, request=req)
+      return FakeResponse({"data": copy.deepcopy(TWEETS), "includes": {}, "meta": {}})
+
+  client = XClient(bearer_token="t", http=MixedHttp(), sleep=lambda s: None, max_retries=1)
+  now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
+  results = run_weekly_fetch(conn, client=client, now=now)
+  handles = {h for h, _ in results}
+  assert handles == {"alice"}
+  ws, _ = week_bounds(now)
+  assert db.edition_for_week(conn, db.get_account(conn, handle="alice")["id"], ws) is not None
+  assert db.edition_for_week(conn, db.get_account(conn, handle="bob")["id"], ws) is None
+  assert "fetch failed for @bob" in capsys.readouterr().out
+
+
+def test_get_with_retries_logs_retry_delay():
+  import httpx, pytest
+  class SeqHttp:
+    def __init__(self): self.n = 0
+    def get(self, path, params=None):
+      self.n += 1
+      return httpx.Response(503, request=httpx.Request("GET", "https://api.x.com/2/x"),
+        json={"detail": "Service Unavailable", "status": 503, "title": "Service Unavailable", "type": "about:blank"})
+  logs = []; sleeps = []
+  http = SeqHttp()
+  with pytest.raises(httpx.HTTPStatusError):
+    from app.fetch.client import get_with_retries
+    get_with_retries(http, "/users/1/tweets", max_retries=1, sleep=sleeps.append, log=logs.append)
+  assert any("503" in m and "retrying" in m for m in logs)
+  assert any("Pay-Per-Use" in m for m in logs)
+  assert sleeps == [2.0]
+
+def test_x_api_error_hint_blank_503():
+  import httpx
+  from app.fetch.client import x_api_error_hint
+  r = httpx.Response(503, json={"detail": "Service Unavailable", "status": 503, "type": "about:blank"})
+  assert "Pay-Per-Use" in x_api_error_hint(r)
+  assert x_api_error_hint(httpx.Response(401)) == ""

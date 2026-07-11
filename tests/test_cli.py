@@ -16,11 +16,16 @@ def test_fetch_runs_weekly_fetch(monkeypatch, capsys):
   monkeypatch.setattr("app.env.load_env", lambda: None)
   monkeypatch.setattr("app.db.resolve_db_path", lambda: "/tmp/news.db")
   monkeypatch.setattr("app.db.connect", lambda path=None: FakeConn())
-  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn: (calls.__setitem__("fetch", calls["fetch"] + 1) or [("alice", 0.015)]))
+  monkeypatch.setattr("app.db.get_app_settings", lambda conn: {"cadence": "twice_weekly", "append_unread": 1})
+  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch",
+    lambda conn, **k: (calls.__setitem__("fetch", calls["fetch"] + 1) or [("alice", 0.015)]))
   fetch()
   out = capsys.readouterr().out
   assert calls == {"fetch": 1}
   assert "alice: $0.015" in out
+  assert "Cadence: twice_weekly" in out
+  assert "Starting fetch" in out
+  assert "Done." in out
   assert "Draining" not in out
 
 def test_fetch_reports_empty_accounts(monkeypatch, capsys):
@@ -29,7 +34,8 @@ def test_fetch_reports_empty_accounts(monkeypatch, capsys):
   monkeypatch.setattr("app.env.load_env", lambda: None)
   monkeypatch.setattr("app.db.resolve_db_path", lambda: "/tmp/news.db")
   monkeypatch.setattr("app.db.connect", lambda path=None: FakeConn())
-  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn: [])
+  monkeypatch.setattr("app.db.get_app_settings", lambda conn: {"cadence": "twice_weekly", "append_unread": 1})
+  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn, **k: [])
   fetch()
   assert "No active accounts." in capsys.readouterr().out
 

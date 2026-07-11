@@ -6,7 +6,8 @@ from app.fetch.client import XClient, COST_PER_COUNTS_ALL, COST_PER_POST_READ, C
 from app.fetch.estimate import counts_query, estimate_fetch_cost, prior_week_windows
 
 class FakeResponse:
-  def __init__(self, body): self.body = body
+  def __init__(self, body, status_code=200):
+    self.body = body; self.status_code = status_code; self.headers = {}
   def raise_for_status(self): pass
   def json(self): return self.body
 

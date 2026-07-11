@@ -1,5 +1,8 @@
 """Console entry points."""
 
+def _verbose(msg):
+  print(msg, flush=True)
+
 def _open_db():
   from app.env import load_env
   load_env()
@@ -39,16 +42,23 @@ def dev():
   uvicorn.run("app.main:create_app", factory=True, reload=True)
 
 def fetch():
-  """Fetch last complete week and build newsletters."""
-  from app.fetch.runner import run_weekly_fetch
+  """Fetch the current cadence period and build newsletters."""
+  from app import db
+  from app.fetch.runner import period_bounds, run_weekly_fetch
   path, conn = _open_db()
   try:
-    print(f"Database: {path}")
-    results = run_weekly_fetch(conn)
+    _verbose(f"Database: {path}")
+    settings = db.get_app_settings(conn)
+    start, end = period_bounds(cadence=settings["cadence"])
+    _verbose(f"Cadence: {settings['cadence']} · period {start[:10]} → {end[:10]}")
+    _verbose("Starting fetch...")
+    results = run_weekly_fetch(conn, log=_verbose)
+    _verbose("Fetch complete.")
     for handle, cost in results:
-      print(f"{handle}: ${cost:.3f}")
+      _verbose(f"@{handle}: ${cost:.3f}")
     if not results:
-      print("No active accounts.")
+      _verbose("No active accounts.")
+    _verbose("Done.")
   finally:
     conn.close()
 

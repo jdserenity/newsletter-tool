@@ -113,9 +113,10 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       return RedirectResponse("/auth/login", status_code=303)
 
   def newsletter_cards(c):
-    from app.fetch.runner import week_bounds
+    from app.fetch.runner import period_bounds
     from app.newsletter import order_entries_unread_first
-    current_week_start, _ = week_bounds()
+    cadence = db.get_app_settings(c)["cadence"]
+    current_week_start, _ = period_bounds(cadence=cadence)
     cards = []
     for a in db.list_accounts(c):
       a["total_cost"] = db.cost_for_account(c, a["id"])
@@ -153,7 +154,15 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       "accounts": accounts,
       "account_count": len(accounts),
       "month_cost_usd": db.total_api_cost(c, since=db.month_start_utc()),
+      "app_settings": db.get_app_settings(c),
     })
+
+  @app.post("/settings")
+  def save_app_settings(request: Request, cadence: str = Form("twice_weekly"),
+                        append_unread: bool = Form(False)):
+    if cadence not in db.CADENCES: raise HTTPException(400, "Invalid cadence")
+    db.update_app_settings(conn(), cadence=cadence, append_unread=append_unread)
+    return RedirectResponse("/settings", status_code=303)
 
   @app.post("/accounts")
   def add_account(request: Request, handle: str = Form(...)):

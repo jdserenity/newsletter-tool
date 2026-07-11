@@ -80,6 +80,11 @@ CREATE TABLE IF NOT EXISTS read_newsletters (
   read_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (account_id, week_start)
 );
+CREATE TABLE IF NOT EXISTS app_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  cadence TEXT NOT NULL DEFAULT 'twice_weekly',
+  append_unread INTEGER NOT NULL DEFAULT 1
+);
 """
 
 def connect(db_path=None):
@@ -105,7 +110,36 @@ def _migrate_schema(conn):
   oauth_cols = {r[1] for r in conn.execute("PRAGMA table_info(oauth_session)").fetchall()}
   if oauth_cols and "expires_at" not in oauth_cols:
     conn.execute("ALTER TABLE oauth_session ADD COLUMN expires_at TEXT"); conn.commit()
+  _ensure_app_settings(conn)
   _repair_inflated_api_call_costs(conn)
+
+def _ensure_app_settings(conn):
+  conn.execute(
+    """CREATE TABLE IF NOT EXISTS app_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      cadence TEXT NOT NULL DEFAULT 'twice_weekly',
+      append_unread INTEGER NOT NULL DEFAULT 1)""")
+  conn.execute(
+    "INSERT OR IGNORE INTO app_settings (id, cadence, append_unread) VALUES (1, 'twice_weekly', 1)")
+  conn.commit()
+
+CADENCES = {"weekly", "twice_weekly"}
+
+def get_app_settings(conn):
+  _ensure_app_settings(conn)
+  row = conn.execute("SELECT cadence, append_unread FROM app_settings WHERE id = 1").fetchone()
+  return {"cadence": row["cadence"], "append_unread": int(row["append_unread"])}
+
+def update_app_settings(conn, cadence=None, append_unread=None):
+  _ensure_app_settings(conn)
+  cur = get_app_settings(conn)
+  if cadence is not None:
+    if cadence not in CADENCES: raise ValueError(f"cadence must be one of {sorted(CADENCES)}")
+    cur["cadence"] = cadence
+  if append_unread is not None: cur["append_unread"] = int(bool(append_unread))
+  conn.execute("UPDATE app_settings SET cadence = ?, append_unread = ? WHERE id = 1",
+    (cur["cadence"], cur["append_unread"])); conn.commit()
+  return cur
 
 def _utc_cutoff(now, hours=24):
   return (now - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
@@ -421,11 +455,19 @@ def edition_for_week(conn, account_id, week_start):
     "SELECT * FROM editions WHERE account_id = ? AND week_start = ?", (account_id, week_start)).fetchone()
   return dict(row) if row else None
 
+def previous_edition(conn, account_id, before_week_start):
+  """Most recent edition for this account with week_start strictly before before_week_start."""
+  row = conn.execute(
+    """SELECT * FROM editions WHERE account_id = ? AND week_start < ?
+       ORDER BY week_start DESC LIMIT 1""", (account_id, before_week_start)).fetchone()
+  return dict(row) if row else None
+
 def database_overview(conn, week_start=None, week_end=None):
   """Summary stats for CLI status. Per-account newsletter stats use the latest edition."""
   if week_start is None or week_end is None:
-    from app.fetch.runner import week_bounds
-    week_start, week_end = week_bounds()
+    from app.fetch.runner import period_bounds
+    s = get_app_settings(conn)
+    week_start, week_end = period_bounds(cadence=s["cadence"])
   accounts = []
   for a in list_accounts(conn, active_only=False):
     tweet_count = conn.execute("SELECT COUNT(*) AS c FROM tweets WHERE account_id = ?", (a["id"],)).fetchone()["c"]

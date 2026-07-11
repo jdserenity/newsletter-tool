@@ -45,7 +45,7 @@ def newsletter_feed(account, editions, base_url):
     content = json.loads(e["content_json"])
     blocks = [item_description_html(i) for i in content]
     desc = "<br><br>".join(blocks) if blocks else "No posts this week."
-    title = escape(f"@{account['handle']} — week of {e['week_start'][:10]}")
+    title = escape(f"@{account['handle']} — {e['week_start'][:10]} → {e['week_end'][:10]}")
     link = f"{base_url}/editions/{e['id']}"
     items.append(
       f"<item><title>{title}</title><link>{escape(link)}</link>"

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_tweet_macros.html" import tweet_media, quoted_block %}
 {% block body_class %}page-edition{% endblock %}
-{% block title %}@{{ edition.handle }} — week of {{ edition.week_start[:10] }}{% endblock %}
+{% block title %}@{{ edition.handle }} — {{ edition.week_start[:10] }} → {{ edition.week_end[:10] }}{% endblock %}
 {% block content %}
 <div class="edition-panel">
   <p class="muted edition-back"><a href="/">← Home</a></p>
@@ -12,7 +12,7 @@
         {% if edition.display_name %}<span class="muted">{{ edition.display_name }}</span>{% endif %}
       </div>
       <div class="week-label muted">
-        Week of {{ edition.week_start[:10] }} · {{ edition.item_count }} items ·
+        {{ edition.week_start[:10] }} → {{ edition.week_end[:10] }} · {{ edition.item_count }} items ·
         ${{ "%.2f"|format(edition.cost_usd) }} · built {{ edition.built_at }}
       </div>
     </div>

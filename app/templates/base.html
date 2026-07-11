@@ -59,6 +59,17 @@
     overflow: auto; height: auto; min-height: 100%;
   }
   .settings-panel { padding: 0 var(--pad-x); max-width: 42rem; }
+  .settings-panel h3 { margin: 1.5rem 0 0.35rem; font-size: 1.05rem; }
+  .settings-panel fieldset { border: 0; margin: 0 0 0.75rem; padding: 0; }
+  .settings-panel legend { font-weight: 600; margin-bottom: 0.35rem; }
+  .settings-panel .choice {
+    display: flex; align-items: flex-start; gap: 0.5rem;
+    margin: 0.35rem 0; cursor: pointer;
+  }
+  .settings-panel .choice input { margin-top: 0.2rem; }
+  .settings-panel .app-settings { display: flex; flex-direction: column; gap: 0.25rem; padding: 1rem; }
+  .settings-panel .app-settings .tip { margin: 0.15rem 0 0.75rem; }
+  .settings-panel .app-settings button { align-self: flex-start; }
   .edition-panel { padding: 0 var(--pad-x) 2rem; max-width: calc(var(--card-width) + 2.5rem); margin: 0 auto; }
   .edition-back { margin: 0 0 0.75rem; }
   .edition-card {

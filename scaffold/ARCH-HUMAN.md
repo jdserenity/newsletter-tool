@@ -4,7 +4,7 @@ What this app is, how the pieces fit, and how to run it. Confirmed facts only. A
 
 ## What it is
 
-**More Mentally Stable X Experience** — a personal web app that turns chosen X (Twitter) accounts into clean **weekly newsletters**. You browse them on a webpage (or via RSS), mark posts and whole weeks as read, and stay logged off X without losing the signal.
+**More Mentally Stable X Experience** — a personal web app that turns chosen X (Twitter) accounts into clean **newsletters** (once or twice a week). You browse them on a webpage (or via RSS), mark posts and whole editions as read, and stay logged off X without losing the signal.
 
 Not email. Not multi-user. Hosted on your VPS as a subdomain.
 
@@ -12,10 +12,10 @@ Not email. Not multi-user. Hosted on your VPS as a subdomain.
   X API (bearer)              Your browser (signed-in)
         │                              │
         ▼                              ▼
-   weekly fetch ─────────────► SQLite  ◄──── like / dislike / settings
+   scheduled fetch ──────────► SQLite  ◄──── like / dislike / settings
    (store tweets)                │
         │                        ├── homepage carousel
-        ▼                        ├── /settings
+        ▼                        ├── /settings (cadence, append unread)
    build editions ───────────────┤
                                  └── public RSS + edition links
 ```
@@ -24,12 +24,12 @@ Not email. Not multi-user. Hosted on your VPS as a subdomain.
 
 | Screen | What you see |
 | --- | --- |
-| **Home** `/` | Horizontal carousel: one card per tracked account (toggles, API cost, this week’s posts). Extra “Add account” card with cost estimate. |
-| **Settings** `/settings` | List accounts, remove them, month’s total API spend. Header button becomes **Home**. |
-| **Edition** `/editions/{id}` | Single week for RSS deep links (public). Like/dislike only if signed in. |
+| **Home** `/` | Horizontal carousel: one card per tracked account (toggles, API cost, latest edition’s posts). Extra “Add account” card with cost estimate. |
+| **Settings** `/settings` | Newsletter cadence (once/week or twice/week Mon+Thu; default twice), whether unread tweets carry into the next edition (default yes), list/remove accounts, month’s total API spend. Header button becomes **Home**. |
+| **Edition** `/editions/{id}` | Single period for RSS deep links (public). Like/dislike only if signed in. |
 | **RSS** `/feeds/{id}.xml` | Public feed per account (no login cookie). |
 
-**Reading flow:** each tweet shows meta on the left (kind, date, stats, link). On the right, **X** then **✓** sit together — X dislikes (local bucket for later suggestions), ✓ likes on X when you click. Either marks the tweet read (dims and sinks to the bottom in the order you handled them, not the order they were posted). Re-clicking undoes it. When every tweet is handled, the big newsletter checkmark moves to the **top** of the card so you can dismiss the whole week without scrolling. Empty weeks keep that checkmark at the bottom.
+**Reading flow:** each tweet shows meta on the left (kind, date, stats, link). On the right, **X** then **✓** sit together — X dislikes (local bucket for later suggestions), ✓ likes on X when you click. Either marks the tweet read (dims and sinks to the bottom). Re-clicking undoes it. When every tweet is handled, the big newsletter checkmark moves to the **top** of the card so you can dismiss the whole week without scrolling. Empty weeks keep that checkmark at the bottom.
 
 **Carousel:** scroll sideways between accounts; scroll inside a card for long weeks. Toolbar toggles and like/dislike save in place (no full page reload). On a phone, each card is nearly full-screen width with snap-between-cards scrolling; the tall desktop toolbar stacks so toggles stay tappable.
 
@@ -37,16 +37,17 @@ Not email. Not multi-user. Hosted on your VPS as a subdomain.
 
 ## How the system is built
 
-One Python **FastAPI** app does everything: pages, RSS, weekly fetch.
+One Python **FastAPI** app does everything: pages, RSS, scheduled fetch.
 
 | Piece | Job |
 | --- | --- |
 | `app/fetch/` | Talk to X (read posts, cost estimate). Respect per-account filters. Record cost rows. |
-| `app/db.py` | SQLite: accounts, tweets, editions, costs, OAuth, likes/dislikes, read state. |
+| `app/db.py` | SQLite: accounts, tweets, editions, costs, OAuth, likes/dislikes, read state, global app settings. |
 | `app/newsletter.py` | Turn stored tweets into newsletter items (no network). |
 | `app/main.py` + templates | Web UI. |
 | `app/rss.py` | Feeds from stored editions only. |
-| `app/scheduler.py` | Monday 06:00 UTC weekly job (also `news-manual-fetch`). |
+| `app/scheduler.py` | Mon (+ Thu when twice-weekly) 06:00 UTC fetch (also `news-manual-fetch`). |
+| `app/user_actions.py` | Owner like/unlike on X (checkmark click). |
 | `app/auth.py` | Sign in with X (OAuth). RSS and edition links stay public. |
 
 **Database file:** path from `DATABASE_PATH`, default `~/.local/share/newsletter-tool/newsletter.db` (outside the git folder so worktrees share data).
@@ -66,7 +67,7 @@ cp .env.example .env    # fill X + OAuth values
 source venv/bin/activate
 news-dev                # local web server
 pytest                  # tests
-news-manual-fetch       # pull this week + build newsletters
+news-manual-fetch       # pull current period + build newsletters
 news-db-status          # what’s in the database
 ```
 

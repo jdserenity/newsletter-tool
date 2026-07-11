@@ -50,5 +50,8 @@ Background follow-on-add and paced like-queue drain never worked reliably (token
 ## CLI entry points missing after pull
 If `news-manual-fetch` / `news-db-status` / `news-dev` are not found: re-run `./scripts/setup.sh` or `pip install -e .`.
 
+## X API 503 used to abort the whole newsletter run
+A single `503 Service Unavailable` from `api.x.com` used to raise immediately in `XClient`, so scheduled jobs (and `news-manual-fetch`) could finish with zero new editions. Bearer GETs now retry transient statuses and transport errors; a per-account failure no longer blocks the other accounts’ editions.
+
 ## `news-db-status` week column
 Per-account newsletter stats use each account’s **latest edition** week (same as the homepage card), not only the current fetch-target week shown in the status header.
