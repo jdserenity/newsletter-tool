@@ -1,6 +1,6 @@
 # newsletter-tool
 
-Personal tool that turns selected X accounts into clean weekly newsletters, viewable on the web and via RSS.
+Personal tool that turns selected X accounts into clean newsletters (once or twice a week), viewable on the web and via RSS.
 
 ## Run
 
@@ -11,7 +11,7 @@ source venv/bin/activate
 news-dev
 ```
 
-Manual weekly fetch (build newsletters + paced likes):
+Manual fetch for the current schedule period (build newsletters + paced likes):
 
 ```bash
 news-manual-fetch
@@ -29,4 +29,4 @@ news-db-status
 pytest
 ```
 
-See `docs/ARCHITECTURE.md` for design details.
+See `scaffold/ARCH-HUMAN.md` for design details.
