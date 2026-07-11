@@ -4,9 +4,11 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 
 ## Product
 - **Name (UI):** More Mentally Stable X Experience
-- Personal single-user tool: selected X accounts → clean weekly newsletters (web + RSS). Email out of scope. No multi-tenant.
+- Personal single-user tool: selected X accounts → clean newsletters (web + RSS). Email out of scope. No multi-tenant.
 - Hosted on owner VPS as subdomain of personal domain.
-- Add/remove tracked X accounts. One weekly **edition** per account per week (`editions` table).
+- Add/remove tracked X accounts. One **edition** per account per fetch period (`editions` table; `week_start`/`week_end` columns are the period bounds).
+- **Cadence** (global `app_settings`): `twice_weekly` (default) or `weekly`. Twice: editions on Mon and Thu (UTC). Periods are Thu→Mon and Mon→Thu. Weekly: Mon→Mon only (job Mon only).
+- **Append unread** (global `app_settings`, default on): when building a new edition, unread tweets from the previous edition are included; when off, only the current period’s tweets (unread from prior editions are dropped from the new edition).
 - Per-account settings (`include_quotes`, `include_replies`, `include_retweets`) gate **fetch** and also re-filter at newsletter build.
 - Per-account API cost from `api_calls` rows (not log files). Settings page also shows active account count + sum of `api_calls.cost_usd` for current calendar month (UTC).
 - **Estimate cost** (add card): 3× `GET /2/tweets/counts/all` (complete Mon–Mon weeks, oldest→newest) ≈ $0.01 each ≈ $0.03. Project weekly fetch as `avg_tweets × $0.005 + $0.01` user lookup; default new-account filters (replies/retweets excluded at API; quotes always counted). Rejects already-tracked handles. Does **not** write `api_calls`.
@@ -28,9 +30,9 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 | `app/rss.py` | RSS XML from editions (no X API) |
 | `app/auth.py` | OAuth2 PKCE, session, `RequireAuthMiddleware`, public prefixes |
 | `app/user_actions.py` | Owner follow + paced like queue drain |
-| `app/scheduler.py` | Weekly job Mon 06:00 UTC; `run_job()` for manual |
+| `app/scheduler.py` | Cron Mon+Thu 06:00 UTC; skips Thu when cadence is weekly; `run_job()` for manual |
 | `app/fetch/client.py` | X API v2 client (bearer) |
-| `app/fetch/runner.py` | Weekly fetch window, store tweets, build editions, enqueue likes |
+| `app/fetch/runner.py` | Period bounds from cadence, fetch window, store tweets, build editions (append unread), enqueue likes |
 | `app/fetch/estimate.py` | Pre-add cost estimate |
 | `app/cli.py` | `news-dev`, `news-manual-fetch`, `news-db-status` |
 | `app/env.py` | Load `.env` |
@@ -40,8 +42,9 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 
 ## SQLite
 - Path: `DATABASE_PATH` env, else `~/.local/share/newsletter-tool/newsletter.db` (outside repo; shared across worktrees).
-- Tables: `accounts`, `tweets`, `editions`, `api_calls`, `oauth_session` (singleton id=1), `liked_tweets`, `like_queue`, `read_tweets`, `read_newsletters`
+- Tables: `accounts`, `tweets`, `editions`, `api_calls`, `oauth_session` (singleton id=1), `app_settings` (singleton id=1: `cadence`, `append_unread`), `liked_tweets`, `like_queue`, `read_tweets`, `read_newsletters`
 - `accounts` defaults: quotes on, replies/retweets off; optional `followed_at`
+- `app_settings` defaults: `cadence='twice_weekly'`, `append_unread=1`
 - Legacy `digests` → `editions` rename on connect
 - Tweet `raw_json` caches API payload for rebuild without refetch
 
@@ -52,7 +55,8 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/` | Carousel; repair missing editions (local); resume like drain (local); schedule bg follow/token maintenance |
-| GET | `/settings` | Account list + remove; month cost |
+| GET | `/settings` | Account list + remove; month cost; global cadence + append-unread |
+| POST | `/settings` | Save global `cadence` (`weekly`\|`twice_weekly`) + `append_unread` |
 | POST | `/accounts` | Add handle; owner follow if OAuth |
 | POST | `/accounts/estimate` | JSON cost estimate |
 | POST | `/accounts/{id}/remove` | → redirect `/settings` |
@@ -80,7 +84,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - **User OAuth** `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_OAUTH_CALLBACK_URL`, `SESSION_SECRET`. Scopes default: `users.read tweet.read like.write follows.write offline.access` (`X_OAUTH_SCOPES` override).
 - **Fetch:** settings exclude replies/retweets at API when off. Quotes always fetched; filtered in builder if `include_quotes` off. Fields include `note_tweet`, media keys, `referenced_tweets.id` (quoted posts extra post reads). Media on `raw_json`; photos inline; video/GIF thumb → X. Media `t.co` stripped at build. `api_calls.units` = timeline tweets + expanded referenced IDs per page.
 - **Owner actions:** add account → POST follow (no following-list precheck). After edition build → enqueue likes; background drain: first like immediate, then ~60s ±1–20s. Tokens in `oauth_session` with `expires_at` (refresh only when needed during drain/maintenance). `liked_tweets` / `like_queue`. Startup resumes non-empty queue. Unfollowed tracked accounts retried in background on home load + on startup when OAuth present.
-- Week window: `week_bounds()` = most recent complete Mon–Mon UTC (`app/fetch/runner.py`).
+- Period window: `period_bounds(now, cadence)` — weekly: most recent complete Mon–Mon UTC; twice_weekly: most recent complete Mon–Thu or Thu–Mon UTC (`app/fetch/runner.py`). Manual fetch (`news-manual-fetch` / `run_job`) uses the same bounds from stored cadence.
 
 ## Run / deploy
 ```bash
