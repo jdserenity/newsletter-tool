@@ -336,3 +336,19 @@ def test_run_weekly_fetch_continues_when_one_account_fails(conn, capsys):
   assert db.edition_for_week(conn, db.get_account(conn, handle="alice")["id"], ws) is not None
   assert db.edition_for_week(conn, db.get_account(conn, handle="bob")["id"], ws) is None
   assert "fetch failed for @bob" in capsys.readouterr().out
+
+
+def test_get_with_retries_logs_retry_delay():
+  import httpx, pytest
+  class SeqHttp:
+    def __init__(self): self.n = 0
+    def get(self, path, params=None):
+      self.n += 1
+      return httpx.Response(503, request=httpx.Request("GET", "https://api.x.com/2/x"))
+  logs = []; sleeps = []
+  http = SeqHttp()
+  with pytest.raises(httpx.HTTPStatusError):
+    from app.fetch.client import get_with_retries
+    get_with_retries(http, "/users/1/tweets", max_retries=1, sleep=sleeps.append, log=logs.append)
+  assert any("503" in m and "retrying" in m for m in logs)
+  assert sleeps == [2.0]

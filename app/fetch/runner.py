@@ -42,16 +42,20 @@ def period_bounds(now=None, cadence="twice_weekly"):
     start = end - timedelta(days=3)
   return _fmt_day(start), _fmt_day(end)
 
-def fetch_account_week(conn, client, account, week_start, week_end, now=None):
+def fetch_account_week(conn, client, account, week_start, week_end, now=None, log=None):
   """Fetch one account's tweets for the period. Returns cost incurred (USD)."""
   now = now or datetime.now(timezone.utc)
   cost = 0.0
+  handle = account["handle"]
+  if log: log(f"Fetching @{handle} ({week_start[:10]} → {week_end[:10]})...")
   if not account["x_user_id"]:
+    if log: log(f"  @{handle}: looking up user id...")
     user, _ = client.get_user_by_handle(account["handle"])
     uc = COST_PER_USER_READ if db.billable_user_lookup(conn, account["id"], now=now) else 0.0
     db.record_api_call(conn, account["id"], "users/by/username", 1 if uc else 0, uc); cost += uc
     db.set_account_identity(conn, account["id"], user["id"], user.get("name", account["handle"]))
     account = db.get_account(conn, account_id=account["id"])
+    if log: log(f"  @{handle}: x_user_id={user['id']}")
   tweets, _, _ = client.get_user_tweets(
     account["x_user_id"], week_start, week_end,
     include_replies=bool(account["include_replies"]), include_retweets=bool(account["include_retweets"]))
@@ -61,6 +65,7 @@ def fetch_account_week(conn, client, account, week_start, week_end, now=None):
   db.record_api_call(conn, account["id"], "users/:id/tweets", billable, c); cost += c
   for t in tweets: t["kind"] = classify_tweet(t)
   db.save_tweets(conn, account["id"], tweets, fetched_at=now)
+  if log: log(f"  @{handle}: stored {len(tweets)} tweets, API ${cost:.3f}")
   return cost
 
 def _merge_unread_from_previous(conn, account_id, week_start, items):
@@ -110,7 +115,7 @@ def repair_missing_editions(conn, now=None):
     repaired.append(account["handle"])
   return repaired
 
-def run_weekly_fetch(conn, client=None, now=None, db_path=None):
+def run_weekly_fetch(conn, client=None, now=None, db_path=None, log=None):
   """Fetch + build newsletters for all active accounts. Returns list of (handle, cost).
 
   Uses the stored cadence to pick the current period (weekly Mon–Mon or twice-weekly half-week).
@@ -118,28 +123,38 @@ def run_weekly_fetch(conn, client=None, now=None, db_path=None):
   raises only when every account fails.
   """
   from app.user_actions import enqueue_newsletter_likes, start_like_drain
-  client = client or XClient()
+  client = client or XClient(log=log)
   settings = db.get_app_settings(conn)
   week_start, week_end = period_bounds(now, settings["cadence"])
+  accounts = db.list_accounts(conn)
+  if log:
+    log(f"Period {week_start[:10]} → {week_end[:10]} · {len(accounts)} account(s)")
+    if settings["append_unread"]: log("Append unread: yes")
+    else: log("Append unread: no (wipe unread from prior edition)")
   costs = {}; errors = {}
-  for account in db.list_accounts(conn):
+  for account in accounts:
     try:
-      costs[account["id"]] = fetch_account_week(conn, client, account, week_start, week_end, now=now)
+      costs[account["id"]] = fetch_account_week(conn, client, account, week_start, week_end, now=now, log=log)
     except Exception as e:
       errors[account["handle"]] = e
+      if log: log(f"  @{account['handle']}: FAILED — {e}")
   if errors and not costs:
     detail = "; ".join(f"@{h}: {err}" for h, err in errors.items())
     raise RuntimeError("Fetch failed for all accounts: " + detail)
   results = []; enqueued = 0
-  for account in db.list_accounts(conn):
+  for account in accounts:
     if account["id"] not in costs: continue
+    if log: log(f"Building edition for @{account['handle']}...")
     items = build_account_edition(conn, account, week_start, week_end, costs[account["id"]],
       append_unread=bool(settings["append_unread"]))
-    enqueued += enqueue_newsletter_likes(conn, items)
+    n_queued = enqueue_newsletter_likes(conn, items); enqueued += n_queued
+    if log: log(f"  @{account['handle']}: {len(items)} items, {n_queued} likes queued")
     results.append((account["handle"], costs[account["id"]]))
   _verify_editions(conn, week_start, account_ids=list(costs))
   if errors:
     for handle, err in errors.items():
-      print(f"warning: fetch failed for @{handle} after retries: {err}", flush=True)
+      msg = f"warning: fetch failed for @{handle} after retries: {err}"
+      if log: log(msg)
+      else: print(msg, flush=True)
   if db_path and enqueued > 0: start_like_drain(db_path)
   return results

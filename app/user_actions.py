@@ -91,25 +91,34 @@ def enqueue_newsletter_likes(conn, items):
     db.enqueue_like(conn, tweet_id); enqueued += 1
   return enqueued
 
-def drain_like_queue(conn, auth_config=None, actions_client=None, sleep=time.sleep):
+def drain_like_queue(conn, auth_config=None, actions_client=None, sleep=time.sleep, log=None):
   """Like every queued tweet: first immediately, then ~1 min ± jitter between each."""
   auth_config = auth_config or auth.AuthConfig.from_env()
   actions_client = actions_client or UserActionsClient()
-  liked = 0; first = True
+  liked = 0; first = True; total = db.like_queue_size(conn)
+  if log and total: log(f"Like queue: {total} tweet(s)")
   while True:
     tweet_id = db.peek_like_queue(conn)
     if not tweet_id: break
     if db.is_tweet_liked(conn, tweet_id):
       db.dequeue_like(conn, tweet_id); continue
-    if not first: sleep(like_delay_seconds())
+    if not first:
+      delay = like_delay_seconds()
+      if log: log(f"  waiting {delay:.0f}s before next like...")
+      sleep(delay)
     first = False
+    if log: log(f"  liking {tweet_id} ({liked + 1}/{total})...")
     access_token, owner_id = auth.get_valid_access_token(conn, auth_config) if auth_config.enabled else (None, None)
-    if not access_token or not owner_id: break
+    if not access_token or not owner_id:
+      if log: log("  stopped: no OAuth session")
+      break
     try:
       actions_client.like_tweet(access_token, owner_id, tweet_id)
       db.mark_tweet_liked(conn, tweet_id)
       db.dequeue_like(conn, tweet_id); liked += 1
-    except Exception: pass
+      if log: log(f"  liked {tweet_id}")
+    except Exception as e:
+      if log: log(f"  like failed for {tweet_id}: {e}")
   return liked
 
 def _drain_worker(db_path):

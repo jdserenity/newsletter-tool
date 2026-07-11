@@ -1,5 +1,8 @@
 """Console entry points."""
 
+def _verbose(msg):
+  print(msg, flush=True)
+
 def _open_db():
   from app.env import load_env
   load_env()
@@ -49,23 +52,27 @@ def fetch():
   from app.user_actions import UserActionsClient, drain_like_queue
   path, conn = _open_db()
   try:
-    print(f"Database: {path}")
+    _verbose(f"Database: {path}")
     settings = db.get_app_settings(conn)
     start, end = period_bounds(cadence=settings["cadence"])
-    print(f"Cadence: {settings['cadence']} · period {start[:10]} → {end[:10]}")
-    results = run_weekly_fetch(conn)  # enqueue only; no background thread
+    _verbose(f"Cadence: {settings['cadence']} · period {start[:10]} → {end[:10]}")
+    _verbose("Starting fetch...")
+    results = run_weekly_fetch(conn, log=_verbose)
     queued = db.like_queue_size(conn)
+    _verbose("Fetch complete.")
     for handle, cost in results:
-      print(f"{handle}: ${cost:.3f}")
+      _verbose(f"@{handle}: ${cost:.3f}")
     if not results:
-      print("No active accounts.")
+      _verbose("No active accounts.")
     elif queued:
       if not db.get_oauth_session(conn):
-        print(f"{queued} likes queued but OAuth is not saved — sign in via the web app once, then re-run or open the homepage.")
+        _verbose(f"{queued} likes queued but OAuth is not saved — sign in via the web app once, then re-run or open the homepage.")
       else:
-        print(f"Draining {queued} queued likes (paced; may take a while)...")
-        liked = drain_like_queue(conn, auth_config=auth.AuthConfig.from_env(), actions_client=UserActionsClient())
-        print(f"Liked {liked} tweets.")
+        _verbose(f"Draining {queued} queued likes (paced ~1 min between each)...")
+        liked = drain_like_queue(conn, auth_config=auth.AuthConfig.from_env(),
+          actions_client=UserActionsClient(), log=_verbose)
+        _verbose(f"Liked {liked} tweets.")
+    _verbose("Done.")
   finally:
     conn.close()
 

@@ -73,32 +73,39 @@ def retry_delay_seconds(attempt, response=None, base=DEFAULT_BACKOFF_BASE):
   return base * (2 ** attempt)
 
 def get_with_retries(http, path, *, params=None, max_retries=DEFAULT_MAX_RETRIES,
-                     sleep=time.sleep, backoff_base=DEFAULT_BACKOFF_BASE):
+                     sleep=time.sleep, backoff_base=DEFAULT_BACKOFF_BASE, log=None):
   """GET with retries on transient status codes and transport errors."""
-  last_exc = None
-  for attempt in range(max_retries + 1):
+  last_exc = None; attempts = max_retries + 1
+  for attempt in range(attempts):
+    if log: log(f"  GET {path} (attempt {attempt + 1}/{attempts})")
     try:
       r = http.get(path, params=params)
     except httpx.TransportError as e:
       last_exc = e
       if attempt >= max_retries: raise
-      sleep(retry_delay_seconds(attempt, base=backoff_base)); continue
+      delay = retry_delay_seconds(attempt, base=backoff_base)
+      if log: log(f"  X API transport error ({e!r}), retrying in {delay:.0f}s...")
+      sleep(delay); continue
     if r.status_code in RETRYABLE_STATUS and attempt < max_retries:
-      sleep(retry_delay_seconds(attempt, response=r, base=backoff_base)); continue
+      delay = retry_delay_seconds(attempt, response=r, base=backoff_base)
+      if log: log(f"  X API {r.status_code}, retrying in {delay:.0f}s...")
+      sleep(delay); continue
     r.raise_for_status()
     return r
   if last_exc: raise last_exc
   raise RuntimeError("get_with_retries exhausted without response")
 
 class XClient:
-  def __init__(self, bearer_token=None, http=None, sleep=time.sleep, max_retries=DEFAULT_MAX_RETRIES):
+  def __init__(self, bearer_token=None, http=None, sleep=time.sleep, max_retries=DEFAULT_MAX_RETRIES, log=None):
     self.token = bearer_token or os.environ.get("X_BEARER_TOKEN", "")
     self.http = http or httpx.Client(base_url=BASE_URL, headers={"Authorization": f"Bearer {self.token}"}, timeout=30)
     self.sleep = sleep
     self.max_retries = max_retries
+    self.log = log
 
   def _get(self, path, params=None):
-    return get_with_retries(self.http, path, params=params, max_retries=self.max_retries, sleep=self.sleep)
+    return get_with_retries(self.http, path, params=params, max_retries=self.max_retries,
+      sleep=self.sleep, log=self.log)
 
   def get_user_by_handle(self, handle):
     """Returns ({id, name, username}, cost_usd)."""
@@ -111,8 +118,9 @@ class XClient:
     excludes = []
     if not include_replies: excludes.append("replies")
     if not include_retweets: excludes.append("retweets")
-    tweets = []; cost = 0.0; units = 0; token = None
+    tweets = []; cost = 0.0; units = 0; token = None; page_n = 0
     while True:
+      page_n += 1
       params = {
         "start_time": start_time, "end_time": end_time, "max_results": 100,
         "tweet.fields": TWEET_FIELDS, "expansions": EXPANSIONS,
@@ -123,7 +131,9 @@ class XClient:
       body = r.json(); page = body.get("data", [])
       enrich_tweets(page, body.get("includes"))
       reads = count_post_reads(body); units += reads; cost += reads * COST_PER_POST_READ
-      tweets.extend(page); token = body.get("meta", {}).get("next_token")
+      tweets.extend(page)
+      if self.log and page: self.log(f"  page {page_n}: +{len(page)} tweets ({len(tweets)} total)")
+      token = body.get("meta", {}).get("next_token")
       if not token: break
     return tweets, cost, units
 

@@ -19,13 +19,17 @@ def test_fetch_runs_weekly_fetch_and_drains_queue(monkeypatch, capsys):
   monkeypatch.setattr("app.db.get_app_settings", lambda conn: {"cadence": "twice_weekly", "append_unread": 1})
   monkeypatch.setattr("app.db.like_queue_size", lambda conn: 2)
   monkeypatch.setattr("app.db.get_oauth_session", lambda conn: {"refresh_token": "rt"})
-  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn: (calls.__setitem__("fetch", calls["fetch"] + 1) or [("alice", 0.015)]))
-  monkeypatch.setattr("app.user_actions.drain_like_queue", lambda *a, **k: (calls.__setitem__("drain", calls["drain"] + 1) or 2))
+  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch",
+    lambda conn, **k: (calls.__setitem__("fetch", calls["fetch"] + 1) or [("alice", 0.015)]))
+  monkeypatch.setattr("app.user_actions.drain_like_queue",
+    lambda *a, **k: (calls.__setitem__("drain", calls["drain"] + 1) or 2))
   fetch()
   out = capsys.readouterr().out
   assert calls == {"fetch": 1, "drain": 1}
   assert "alice: $0.015" in out
   assert "Cadence: twice_weekly" in out
+  assert "Starting fetch" in out
+  assert "Done." in out
   assert "Draining 2 queued likes" in out
   assert "Liked 2 tweets." in out
 
@@ -38,7 +42,7 @@ def test_fetch_warns_when_likes_queued_without_oauth(monkeypatch, capsys):
   monkeypatch.setattr("app.db.get_app_settings", lambda conn: {"cadence": "weekly", "append_unread": 1})
   monkeypatch.setattr("app.db.like_queue_size", lambda conn: 3)
   monkeypatch.setattr("app.db.get_oauth_session", lambda conn: None)
-  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn: [("alice", 0.015)])
+  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn, **k: [("alice", 0.015)])
   fetch()
   out = capsys.readouterr().out
   assert "OAuth is not saved" in out
@@ -52,7 +56,7 @@ def test_fetch_reports_empty_accounts(monkeypatch, capsys):
   monkeypatch.setattr("app.db.connect", lambda path=None: FakeConn())
   monkeypatch.setattr("app.db.get_app_settings", lambda conn: {"cadence": "twice_weekly", "append_unread": 1})
   monkeypatch.setattr("app.db.like_queue_size", lambda conn: 0)
-  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn: [])
+  monkeypatch.setattr("app.fetch.runner.run_weekly_fetch", lambda conn, **k: [])
   fetch()
   assert "No active accounts." in capsys.readouterr().out
 
