@@ -49,7 +49,9 @@
       <div class="tweet-list">
       {% for item in card.entries %}
       {% set is_read = item.tweet_id in card.read_tweet_ids %}
-      <div class="tweet{% if is_read %} tweet-read{% endif %}" data-tweet-id="{{ item.tweet_id }}" data-created-at="{{ item.created_at }}">
+      {% set is_liked = item.tweet_id in card.liked_tweet_ids %}
+      {% set is_disliked = item.tweet_id in card.disliked_tweet_ids %}
+      <div class="tweet{% if is_read %} tweet-read{% endif %}" data-tweet-id="{{ item.tweet_id }}" data-created-at="{{ item.created_at }}"{% if is_read %} data-read-at="{{ card.read_tweet_times[item.tweet_id] }}"{% endif %}>
         <div class="tweet-text">
           <span class="text-content">{{ item.text }}</span>
           <button type="button" class="tweet-more" hidden>More</button>
@@ -63,11 +65,18 @@
             {{ item.likes }} likes · {{ item.reposts }} reposts ·
             <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">view on X</a>
           </span>
-          <button type="button" class="mark-check{% if is_read %} is-read{% endif %}"
-            data-tweet-id="{{ item.tweet_id }}"
-            aria-pressed="{{ 'true' if is_read else 'false' }}"
-            aria-label="{{ 'Mark as unread' if is_read else 'Mark as read' }}"
-            title="{{ 'Mark as unread' if is_read else 'Mark as read' }}"></button>
+          <div class="tweet-actions">
+          <button type="button" class="mark-dislike{% if is_disliked %} is-active{% endif %}"
+            data-tweet-id="{{ item.tweet_id }}" data-action="dislike"
+            aria-pressed="{{ 'true' if is_disliked else 'false' }}"
+            aria-label="{{ 'Undo dislike' if is_disliked else 'Dislike' }}"
+            title="{{ 'Undo dislike' if is_disliked else 'Dislike' }}"></button>
+          <button type="button" class="mark-check{% if is_liked %} is-active{% endif %}"
+            data-tweet-id="{{ item.tweet_id }}" data-action="like"
+            aria-pressed="{{ 'true' if is_liked else 'false' }}"
+            aria-label="{{ 'Undo like' if is_liked else 'Like' }}"
+            title="{{ 'Undo like' if is_liked else 'Like' }}"></button>
+          </div>
         </div>
       </div>
       {% else %}

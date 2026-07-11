@@ -93,11 +93,14 @@ def quoted_for_display(raw):
   if handle: out["handle"] = handle
   return out
 
-def order_entries_unread_first(items, read_ids):
-  """Unread tweets first (chrono), then read tweets (chrono) at the bottom."""
+def order_entries_unread_first(items, read_ids, read_times=None):
+  """Unread tweets first (chrono), then read tweets (by when marked read) at the bottom."""
   read_ids = set(read_ids or [])
+  read_times = read_times or {}
   unread = [i for i in items if i.get("tweet_id") not in read_ids]
   read = [i for i in items if i.get("tweet_id") in read_ids]
+  unread.sort(key=lambda i: i["created_at"])
+  read.sort(key=lambda i: read_times.get(i.get("tweet_id"), i["created_at"]))
   return unread + read
 
 def build_newsletter(tweets, account):

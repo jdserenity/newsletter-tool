@@ -66,10 +66,9 @@ CREATE TABLE IF NOT EXISTS liked_tweets (
   tweet_id TEXT NOT NULL PRIMARY KEY,
   liked_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE TABLE IF NOT EXISTS like_queue (
-  id INTEGER PRIMARY KEY,
-  tweet_id TEXT NOT NULL UNIQUE,
-  queued_at TEXT NOT NULL DEFAULT (datetime('now'))
+CREATE TABLE IF NOT EXISTS disliked_tweets (
+  tweet_id TEXT NOT NULL PRIMARY KEY,
+  disliked_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS read_tweets (
   tweet_id TEXT NOT NULL PRIMARY KEY,
@@ -331,7 +330,7 @@ def get_oauth_session(conn):
   row = conn.execute("SELECT * FROM oauth_session WHERE id = 1").fetchone()
   return dict(row) if row else None
 
-# --- liked tweets (owner actions) ---
+# --- liked / disliked tweets (owner feedback via check / x in the UI) ---
 
 def is_tweet_liked(conn, tweet_id):
   return conn.execute("SELECT 1 FROM liked_tweets WHERE tweet_id = ?", (tweet_id,)).fetchone() is not None
@@ -339,13 +338,66 @@ def is_tweet_liked(conn, tweet_id):
 def mark_tweet_liked(conn, tweet_id):
   conn.execute("INSERT OR IGNORE INTO liked_tweets (tweet_id) VALUES (?)", (tweet_id,)); conn.commit()
 
+def clear_tweet_liked(conn, tweet_id):
+  conn.execute("DELETE FROM liked_tweets WHERE tweet_id = ?", (tweet_id,)); conn.commit()
+
+def is_tweet_disliked(conn, tweet_id):
+  return conn.execute("SELECT 1 FROM disliked_tweets WHERE tweet_id = ?", (tweet_id,)).fetchone() is not None
+
+def mark_tweet_disliked(conn, tweet_id):
+  conn.execute("INSERT OR IGNORE INTO disliked_tweets (tweet_id) VALUES (?)", (tweet_id,)); conn.commit()
+
+def clear_tweet_disliked(conn, tweet_id):
+  conn.execute("DELETE FROM disliked_tweets WHERE tweet_id = ?", (tweet_id,)); conn.commit()
+
+def like_tweet(conn, tweet_id):
+  """Checkmark: like + mark read. Clears any prior dislike."""
+  clear_tweet_disliked(conn, tweet_id)
+  mark_tweet_liked(conn, tweet_id)
+  mark_tweet_read(conn, tweet_id)
+
+def dislike_tweet(conn, tweet_id):
+  """X button: dislike + mark read. Clears any prior like. Bucket for later LLM use."""
+  clear_tweet_liked(conn, tweet_id)
+  mark_tweet_disliked(conn, tweet_id)
+  mark_tweet_read(conn, tweet_id)
+
+def clear_tweet_feedback(conn, tweet_id):
+  """Undo like/dislike and mark unread."""
+  clear_tweet_liked(conn, tweet_id)
+  clear_tweet_disliked(conn, tweet_id)
+  mark_tweet_unread(conn, tweet_id)
+
+def liked_tweet_ids(conn, tweet_ids=None):
+  if tweet_ids is not None:
+    if not tweet_ids: return set()
+    placeholders = ",".join("?" * len(tweet_ids))
+    rows = conn.execute(
+      f"SELECT tweet_id FROM liked_tweets WHERE tweet_id IN ({placeholders})", tuple(tweet_ids)).fetchall()
+  else:
+    rows = conn.execute("SELECT tweet_id FROM liked_tweets").fetchall()
+  return {r["tweet_id"] for r in rows}
+
+def disliked_tweet_ids(conn, tweet_ids=None):
+  if tweet_ids is not None:
+    if not tweet_ids: return set()
+    placeholders = ",".join("?" * len(tweet_ids))
+    rows = conn.execute(
+      f"SELECT tweet_id FROM disliked_tweets WHERE tweet_id IN ({placeholders})", tuple(tweet_ids)).fetchall()
+  else:
+    rows = conn.execute("SELECT tweet_id FROM disliked_tweets").fetchall()
+  return {r["tweet_id"] for r in rows}
+
 # --- read tweets (owner marked as read in the UI) ---
 
 def is_tweet_read(conn, tweet_id):
   return conn.execute("SELECT 1 FROM read_tweets WHERE tweet_id = ?", (tweet_id,)).fetchone() is not None
 
 def mark_tweet_read(conn, tweet_id):
-  conn.execute("INSERT OR IGNORE INTO read_tweets (tweet_id) VALUES (?)", (tweet_id,)); conn.commit()
+  conn.execute(
+    """INSERT INTO read_tweets (tweet_id, read_at) VALUES (?, datetime('now'))
+       ON CONFLICT(tweet_id) DO UPDATE SET read_at = excluded.read_at""",
+    (tweet_id,)); conn.commit()
 
 def mark_tweet_unread(conn, tweet_id):
   conn.execute("DELETE FROM read_tweets WHERE tweet_id = ?", (tweet_id,)); conn.commit()
@@ -361,6 +413,17 @@ def read_tweet_ids(conn, tweet_ids=None):
     rows = conn.execute("SELECT tweet_id FROM read_tweets").fetchall()
   return {r["tweet_id"] for r in rows}
 
+def read_tweet_times(conn, tweet_ids=None):
+  """Return tweet_id -> read_at for marked-read tweets. Optionally filter to tweet_ids."""
+  if tweet_ids is not None:
+    if not tweet_ids: return {}
+    placeholders = ",".join("?" * len(tweet_ids))
+    rows = conn.execute(
+      f"SELECT tweet_id, read_at FROM read_tweets WHERE tweet_id IN ({placeholders})", tuple(tweet_ids)).fetchall()
+  else:
+    rows = conn.execute("SELECT tweet_id, read_at FROM read_tweets").fetchall()
+  return {r["tweet_id"]: r["read_at"] for r in rows}
+
 # --- read newsletters (hide account card for that week) ---
 
 def is_newsletter_read(conn, account_id, week_start):
@@ -373,34 +436,16 @@ def mark_newsletter_read(conn, account_id, week_start):
     "INSERT OR IGNORE INTO read_newsletters (account_id, week_start) VALUES (?, ?)",
     (account_id, week_start)); conn.commit()
 
-# --- like queue (background pacing) ---
-
-def enqueue_like(conn, tweet_id):
-  conn.execute("INSERT OR IGNORE INTO like_queue (tweet_id) VALUES (?)", (tweet_id,)); conn.commit()
-
-def is_tweet_queued(conn, tweet_id):
-  return conn.execute("SELECT 1 FROM like_queue WHERE tweet_id = ?", (tweet_id,)).fetchone() is not None
-
-def peek_like_queue(conn):
-  row = conn.execute("SELECT tweet_id FROM like_queue ORDER BY id LIMIT 1").fetchone()
-  return row["tweet_id"] if row else None
-
-def dequeue_like(conn, tweet_id):
-  conn.execute("DELETE FROM like_queue WHERE tweet_id = ?", (tweet_id,)); conn.commit()
-
-def like_queue_size(conn):
-  return conn.execute("SELECT COUNT(*) AS c FROM like_queue").fetchone()["c"]
-
 def liked_tweet_count(conn, account_id):
   return conn.execute(
     """SELECT COUNT(*) AS c FROM tweets t
        INNER JOIN liked_tweets l ON l.tweet_id = t.tweet_id
        WHERE t.account_id = ?""", (account_id,)).fetchone()["c"]
 
-def queued_like_count(conn, account_id):
+def disliked_tweet_count(conn, account_id):
   return conn.execute(
     """SELECT COUNT(*) AS c FROM tweets t
-       INNER JOIN like_queue q ON q.tweet_id = t.tweet_id
+       INNER JOIN disliked_tweets d ON d.tweet_id = t.tweet_id
        WHERE t.account_id = ?""", (account_id,)).fetchone()["c"]
 
 # --- overview (CLI status) ---
@@ -440,8 +485,7 @@ def database_overview(conn, week_start=None, week_end=None):
       "tweet_count": tweet_count, "tweets_in_week": tweets_in_week,
       "edition_week_start": ed_ws, "edition_week_end": ed_we,
       "liked_count": liked_tweet_count(conn, a["id"]),
-      "queued_like_count": queued_like_count(conn, a["id"]),
-      "followed": bool(a.get("followed_at")),
+      "disliked_count": disliked_tweet_count(conn, a["id"]),
       "edition_items": edition_items,
       "edition_cost_usd": edition["cost_usd"] if edition else None,
       "total_cost_usd": cost_for_account(conn, a["id"]),
@@ -461,7 +505,5 @@ def database_overview(conn, week_start=None, week_end=None):
     "tweet_count": totals["tweets"],
     "edition_count": totals["editions"],
     "api_cost_usd": totals["api_cost_usd"],
-    "like_queue_size": like_queue_size(conn),
-    "pending_follow_count": pending_follow_count(conn),
     "oauth_signed_in": get_oauth_session(conn) is not None,
   }

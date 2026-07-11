@@ -1,18 +1,42 @@
 (function() {
-  // In-place actions (settings, mark read). Full form POSTs used to redirect to /
+  // In-place actions (settings, like/dislike). Full form POSTs used to redirect to /
   // and reload the page, which always reset the carousel to scrollLeft = 0.
 
   function postForm(url, fields) {
     var body = new URLSearchParams();
-    Object.keys(fields).forEach(function(k) { body.set(k, fields[k]); });
+    Object.keys(fields || {}).forEach(function(k) { body.set(k, fields[k]); });
     return fetch(url, {
       method: 'POST', body: body,
       headers: { 'Accept': 'application/json' },
       credentials: 'same-origin'
     }).then(function(r) {
-      if (!r.ok) throw new Error('request failed');
-      return r.json();
+      return r.json().catch(function() { return {}; }).then(function(data) {
+        if (!r.ok) {
+          var msg = data.detail;
+          if (Array.isArray(msg)) msg = msg.map(function(d) { return d.msg || String(d); }).join('; ');
+          if (!msg || typeof msg !== 'string') msg = 'Something went wrong. Please try again.';
+          var err = new Error(msg);
+          err.status = r.status;
+          throw err;
+        }
+        return data;
+      });
     });
+  }
+
+  function showActionError(message) {
+    var el = document.getElementById('action-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'action-toast';
+      el.className = 'action-toast';
+      el.setAttribute('role', 'alert');
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(function() { el.hidden = true; }, 8000);
   }
 
   function sortTweetList(list) {
@@ -22,6 +46,9 @@
       var ar = a.classList.contains('tweet-read') ? 1 : 0;
       var br = b.classList.contains('tweet-read') ? 1 : 0;
       if (ar !== br) return ar - br;
+      if (ar === 1) {
+        return (a.getAttribute('data-read-at') || '').localeCompare(b.getAttribute('data-read-at') || '');
+      }
       return (a.getAttribute('data-created-at') || '').localeCompare(b.getAttribute('data-created-at') || '');
     });
     tweets.forEach(function(t) { list.appendChild(t); });
@@ -47,6 +74,31 @@
     footer.classList.toggle('is-top', allRead);
     if (allRead) body.insertBefore(footer, body.firstChild);
     else body.appendChild(footer);
+  }
+
+  function setFeedbackUi(tweet, feedback) {
+    var likeBtn = tweet.querySelector('.mark-check[data-action="like"]');
+    var dislikeBtn = tweet.querySelector('.mark-dislike[data-action="dislike"]');
+    var liked = feedback === 'like';
+    var disliked = feedback === 'dislike';
+    var read = liked || disliked;
+    tweet.classList.toggle('tweet-read', read);
+    if (read) tweet.setAttribute('data-read-at', new Date().toISOString());
+    else tweet.removeAttribute('data-read-at');
+    if (likeBtn) {
+      likeBtn.classList.toggle('is-active', liked);
+      likeBtn.setAttribute('aria-pressed', liked ? 'true' : 'false');
+      likeBtn.setAttribute('aria-label', liked ? 'Undo like' : 'Like');
+      likeBtn.title = liked ? 'Undo like' : 'Like';
+    }
+    if (dislikeBtn) {
+      dislikeBtn.classList.toggle('is-active', disliked);
+      dislikeBtn.setAttribute('aria-pressed', disliked ? 'true' : 'false');
+      dislikeBtn.setAttribute('aria-label', disliked ? 'Undo dislike' : 'Dislike');
+      dislikeBtn.title = disliked ? 'Undo dislike' : 'Dislike';
+    }
+    sortTweetList(tweet.parentElement);
+    updateNewsletterCheckPosition(tweet.closest('.newsletter-body'));
   }
 
   function setupTextClamp(root) {
@@ -96,7 +148,7 @@
   });
 
   document.addEventListener('click', function(e) {
-    var btn = e.target.closest && e.target.closest('button.mark-check');
+    var btn = e.target.closest && e.target.closest('button.mark-check, button.mark-dislike');
     if (!btn) return;
     e.preventDefault();
 
@@ -115,21 +167,20 @@
     }
 
     var tweetId = btn.getAttribute('data-tweet-id');
-    if (!tweetId) return;
+    var action = btn.getAttribute('data-action');
+    if (!tweetId || !action) return;
     var tweet = btn.closest('.tweet');
-    var nextRead = !btn.classList.contains('is-read');
+    var undo = btn.classList.contains('is-active');
     btn.disabled = true;
-    postForm('/tweets/' + encodeURIComponent(tweetId) + '/read', { read: nextRead ? 'true' : 'false' })
-      .then(function() {
-        btn.classList.toggle('is-read', nextRead);
-        btn.setAttribute('aria-pressed', nextRead ? 'true' : 'false');
-        btn.setAttribute('aria-label', nextRead ? 'Mark as unread' : 'Mark as read');
-        btn.title = nextRead ? 'Mark as unread' : 'Mark as read';
-        if (tweet) {
-          tweet.classList.toggle('tweet-read', nextRead);
-          sortTweetList(tweet.parentElement);
-          updateNewsletterCheckPosition(tweet.closest('.newsletter-body'));
-        }
+    var req;
+    if (undo) req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/read', { read: 'false' });
+    else if (action === 'like') req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/like');
+    else req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/dislike');
+    req.then(function() {
+        if (tweet) setFeedbackUi(tweet, undo ? null : action);
+      })
+      .catch(function(err) {
+        if (!undo && action === 'like') showActionError(err.message || 'Could not like this tweet on X.');
       })
       .finally(function() { btn.disabled = false; });
   });

@@ -141,7 +141,7 @@ def test_database_overview_reports_missing_edition(conn):
   assert o["accounts"][0]["edition_items"] is None
   assert o["accounts"][0]["tweets_in_week"] == 0  # no edition yet; fetch week has no tweets
   assert o["accounts"][0]["liked_count"] == 0
-  assert o["accounts"][0]["followed"] is False
+  assert o["accounts"][0]["disliked_count"] == 0
   db.save_edition(conn, aid, ws, we, [{"tweet_id": "1"}], 0.01)
   o = db.database_overview(conn, fetch_ws, fetch_we)
   a = o["accounts"][0]
@@ -149,22 +149,43 @@ def test_database_overview_reports_missing_edition(conn):
   assert a["tweets_in_week"] == 1
   assert a["edition_week_start"] == ws
 
-def test_liked_and_queued_counts_per_account(conn):
+def test_liked_and_disliked_counts_per_account(conn):
   aid = db.add_account(conn, "alice")
   db.save_tweets(conn, aid, [
     {"id": "1", "text": "a", "created_at": "2026-06-23T12:00:00Z"},
     {"id": "2", "text": "b", "created_at": "2026-06-23T13:00:00Z"},
   ])
-  db.mark_tweet_liked(conn, "1"); db.enqueue_like(conn, "2")
+  db.like_tweet(conn, "1"); db.dislike_tweet(conn, "2")
   assert db.liked_tweet_count(conn, aid) == 1
-  assert db.queued_like_count(conn, aid) == 1
-  db.mark_account_followed(conn, aid)
+  assert db.disliked_tweet_count(conn, aid) == 1
   from app.fetch.runner import week_bounds
   o = db.database_overview(conn, *week_bounds())
   a = o["accounts"][0]
   assert a["liked_count"] == 1
-  assert a["queued_like_count"] == 1
-  assert a["followed"] is True
+  assert a["disliked_count"] == 1
+
+def test_like_tweet_marks_read_and_clears_dislike(conn):
+  db.dislike_tweet(conn, "99")
+  assert db.is_tweet_disliked(conn, "99")
+  assert db.is_tweet_read(conn, "99")
+  db.like_tweet(conn, "99")
+  assert db.is_tweet_liked(conn, "99")
+  assert not db.is_tweet_disliked(conn, "99")
+  assert db.is_tweet_read(conn, "99")
+
+def test_dislike_tweet_marks_read_and_clears_like(conn):
+  db.like_tweet(conn, "99")
+  db.dislike_tweet(conn, "99")
+  assert db.is_tweet_disliked(conn, "99")
+  assert not db.is_tweet_liked(conn, "99")
+  assert db.is_tweet_read(conn, "99")
+
+def test_clear_tweet_feedback_unreads_and_clears_signals(conn):
+  db.like_tweet(conn, "99")
+  db.clear_tweet_feedback(conn, "99")
+  assert not db.is_tweet_liked(conn, "99")
+  assert not db.is_tweet_disliked(conn, "99")
+  assert not db.is_tweet_read(conn, "99")
 
 def test_migrate_adds_followed_at_column(tmp_path):
   import sqlite3

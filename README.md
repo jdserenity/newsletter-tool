@@ -11,7 +11,7 @@ source venv/bin/activate
 news-dev
 ```
 
-Manual fetch for the current schedule period (build newsletters + paced likes):
+Manual fetch for the current schedule period (build newsletters):
 
 ```bash
 news-manual-fetch

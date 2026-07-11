@@ -122,7 +122,6 @@ def run_weekly_fetch(conn, client=None, now=None, db_path=None, log=None):
   Retries transient X errors inside the client. If one account still fails, others still build;
   raises only when every account fails.
   """
-  from app.user_actions import enqueue_newsletter_likes, start_like_drain
   client = client or XClient(log=log)
   settings = db.get_app_settings(conn)
   week_start, week_end = period_bounds(now, settings["cadence"])
@@ -141,14 +140,13 @@ def run_weekly_fetch(conn, client=None, now=None, db_path=None, log=None):
   if errors and not costs:
     detail = "; ".join(f"@{h}: {err}" for h, err in errors.items())
     raise RuntimeError("Fetch failed for all accounts: " + detail)
-  results = []; enqueued = 0
+  results = []
   for account in accounts:
     if account["id"] not in costs: continue
     if log: log(f"Building edition for @{account['handle']}...")
     items = build_account_edition(conn, account, week_start, week_end, costs[account["id"]],
       append_unread=bool(settings["append_unread"]))
-    n_queued = enqueue_newsletter_likes(conn, items); enqueued += n_queued
-    if log: log(f"  @{account['handle']}: {len(items)} items, {n_queued} likes queued")
+    if log: log(f"  @{account['handle']}: {len(items)} items")
     results.append((account["handle"], costs[account["id"]]))
   _verify_editions(conn, week_start, account_ids=list(costs))
   if errors:
@@ -156,5 +154,4 @@ def run_weekly_fetch(conn, client=None, now=None, db_path=None, log=None):
       msg = f"warning: fetch failed for @{handle} after retries: {err}"
       if log: log(msg)
       else: print(msg, flush=True)
-  if db_path and enqueued > 0: start_like_drain(db_path)
   return results
