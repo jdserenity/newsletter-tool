@@ -192,6 +192,7 @@ def test_like_tweet_x_failure_does_not_save_local(auth_client, monkeypatch):
       "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0}], 0.01)
   r = auth_client.post("/tweets/1/like", headers={"Accept": "application/json"})
   assert r.status_code == 502
+  assert "X like failed" in r.json()["detail"]
   assert not db.is_tweet_liked(c, "1")
 
 def test_logout_clears_session(auth_client, monkeypatch):

@@ -478,3 +478,5 @@ def test_home_loads_home_js_for_in_place_actions(client):
   assert js.status_code == 200
   assert "updateNewsletterCheckPosition" in js.text
   assert "data-read-at" in js.text
+  assert "showActionError" in js.text
+  assert "action-toast" in js.text

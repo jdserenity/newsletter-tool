@@ -10,9 +10,33 @@
       headers: { 'Accept': 'application/json' },
       credentials: 'same-origin'
     }).then(function(r) {
-      if (!r.ok) throw new Error('request failed');
-      return r.json();
+      return r.json().catch(function() { return {}; }).then(function(data) {
+        if (!r.ok) {
+          var msg = data.detail;
+          if (Array.isArray(msg)) msg = msg.map(function(d) { return d.msg || String(d); }).join('; ');
+          if (!msg || typeof msg !== 'string') msg = 'Something went wrong. Please try again.';
+          var err = new Error(msg);
+          err.status = r.status;
+          throw err;
+        }
+        return data;
+      });
     });
+  }
+
+  function showActionError(message) {
+    var el = document.getElementById('action-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'action-toast';
+      el.className = 'action-toast';
+      el.setAttribute('role', 'alert');
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(function() { el.hidden = true; }, 8000);
   }
 
   function sortTweetList(list) {
@@ -154,6 +178,9 @@
     else req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/dislike');
     req.then(function() {
         if (tweet) setFeedbackUi(tweet, undo ? null : action);
+      })
+      .catch(function(err) {
+        if (!undo && action === 'like') showActionError(err.message || 'Could not like this tweet on X.');
       })
       .finally(function() { btn.disabled = false; });
   });
