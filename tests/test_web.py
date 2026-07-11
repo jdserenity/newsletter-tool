@@ -296,7 +296,7 @@ def test_like_tweet_json_marks_read_and_liked(client):
   _seed_edition(client.db_path)
   r = client.post("/tweets/1/like", headers={"Accept": "application/json"})
   assert r.status_code == 200
-  assert r.json() == {"ok": True, "tweet_id": "1", "feedback": "like", "read": True}
+  assert r.json() == {"ok": True, "tweet_id": "1", "feedback": "like", "read": True, "liked_on_x": False}
   c = db.connect(client.db_path)
   assert db.is_tweet_read(c, "1")
   assert db.is_tweet_liked(c, "1")

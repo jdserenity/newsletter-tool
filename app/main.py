@@ -15,6 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app import auth, db
 from app.fetch.runner import repair_missing_editions
 from app.scheduler import start_scheduler
+from app.user_actions import LikeActionError, like_tweet_on_x, unlike_tweet_on_x
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -52,6 +53,23 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     """Persist OAuth tokens from the browser session into SQLite when present."""
     if not auth_config.enabled: return
     auth.persist_session_oauth(c, request)
+
+  def owner_x_like(c, request: Request, tweet_id: str):
+    """Like on X using the signed-in owner's token. Skipped when auth is disabled (tests)."""
+    if not auth_config.enabled: return
+    access, owner_id = auth.owner_access_token(c, request, auth_config)
+    if not access or not owner_id:
+      raise HTTPException(401, "Sign in with X to like tweets")
+    try: like_tweet_on_x(access, owner_id, tweet_id)
+    except LikeActionError as e: raise HTTPException(502, str(e)) from e
+
+  def owner_x_unlike(c, request: Request, tweet_id: str):
+    """Unlike on X when clearing local like. Best-effort; skips when auth is off."""
+    if not auth_config.enabled: return
+    access, owner_id = auth.owner_access_token(c, request, auth_config)
+    if not access or not owner_id: return
+    try: unlike_tweet_on_x(access, owner_id, tweet_id)
+    except LikeActionError: pass
 
   if auth_config.enabled:
     @app.get("/auth/login", response_class=HTMLResponse)
@@ -185,14 +203,16 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   @app.post("/tweets/{tweet_id}/like")
   def like_tweet(request: Request, tweet_id: str):
     c = conn()
+    owner_x_like(c, request, tweet_id)
     db.like_tweet(c, tweet_id)
     if "application/json" in request.headers.get("accept", ""):
-      return JSONResponse({"ok": True, "tweet_id": tweet_id, "feedback": "like", "read": True})
+      return JSONResponse({"ok": True, "tweet_id": tweet_id, "feedback": "like", "read": True, "liked_on_x": auth_config.enabled})
     return RedirectResponse("/", status_code=303)
 
   @app.post("/tweets/{tweet_id}/dislike")
   def dislike_tweet(request: Request, tweet_id: str):
     c = conn()
+    if db.is_tweet_liked(c, tweet_id): owner_x_unlike(c, request, tweet_id)
     db.dislike_tweet(c, tweet_id)
     if "application/json" in request.headers.get("accept", ""):
       return JSONResponse({"ok": True, "tweet_id": tweet_id, "feedback": "dislike", "read": True})
@@ -200,13 +220,15 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
 
   @app.post("/tweets/{tweet_id}/read")
   def set_tweet_read(request: Request, tweet_id: str, read: bool = Form(False)):
-    """read=true likes (checkmark); read=false clears like/dislike and marks unread."""
+    """read=true likes on X + locally; read=false unlikes on X and clears feedback."""
     c = conn()
-    if read: db.like_tweet(c, tweet_id)
-    else: db.clear_tweet_feedback(c, tweet_id)
+    if read: owner_x_like(c, request, tweet_id); db.like_tweet(c, tweet_id)
+    else:
+      if db.is_tweet_liked(c, tweet_id): owner_x_unlike(c, request, tweet_id)
+      db.clear_tweet_feedback(c, tweet_id)
     if "application/json" in request.headers.get("accept", ""):
       return JSONResponse({"ok": True, "tweet_id": tweet_id, "read": read,
-        "feedback": "like" if read else None})
+        "feedback": "like" if read else None, "liked_on_x": read and auth_config.enabled})
     return RedirectResponse("/", status_code=303)
 
   @app.post("/accounts/{account_id}/read-newsletter")

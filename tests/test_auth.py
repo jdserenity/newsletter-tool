@@ -154,6 +154,46 @@ def test_home_persists_oauth_session(auth_client, monkeypatch):
   assert row["refresh_token"] == "user-rt"
   assert row["access_token"] == "user-at"
 
+def _login_auth_client(auth_client, monkeypatch):
+  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {
+    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
+  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "99", "username": "owner", "name": "Owner"})
+  login = auth_client.get("/auth/login/start", follow_redirects=False)
+  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+  auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
+
+def test_like_tweet_calls_x_when_auth_enabled(auth_client, monkeypatch):
+  x_calls = []
+  def fake_like(access_token, owner_user_id, tweet_id, actions_client=None):
+    x_calls.append((access_token, owner_user_id, tweet_id))
+    return {"data": {"liked": True}}
+  monkeypatch.setattr("app.main.like_tweet_on_x", fake_like)
+  _login_auth_client(auth_client, monkeypatch)
+  c = db.connect(auth_client.app.state.db_path)
+  aid = db.add_account(c, "alice")
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z",
+    [{"tweet_id": "1", "kind": "post", "text": "hello", "created_at": "2026-06-30T10:00:00Z",
+      "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0}], 0.01)
+  r = auth_client.post("/tweets/1/like", headers={"Accept": "application/json"})
+  assert r.status_code == 200
+  assert r.json()["liked_on_x"] is True
+  assert x_calls == [("user-at", "99", "1")]
+  assert db.is_tweet_liked(c, "1")
+
+def test_like_tweet_x_failure_does_not_save_local(auth_client, monkeypatch):
+  from app.user_actions import LikeActionError
+  monkeypatch.setattr("app.main.like_tweet_on_x",
+    lambda *a, **k: (_ for _ in ()).throw(LikeActionError("X like failed (403)")))
+  _login_auth_client(auth_client, monkeypatch)
+  c = db.connect(auth_client.app.state.db_path)
+  aid = db.add_account(c, "alice")
+  db.save_edition(c, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z",
+    [{"tweet_id": "1", "kind": "post", "text": "hello", "created_at": "2026-06-30T10:00:00Z",
+      "url": "https://x.com/alice/status/1", "likes": 0, "reposts": 0}], 0.01)
+  r = auth_client.post("/tweets/1/like", headers={"Accept": "application/json"})
+  assert r.status_code == 502
+  assert not db.is_tweet_liked(c, "1")
+
 def test_logout_clears_session(auth_client, monkeypatch):
   monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {"access_token": "at", "refresh_token": "rt"})
   monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "1", "username": "u", "name": "U"})
