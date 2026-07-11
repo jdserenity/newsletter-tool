@@ -114,11 +114,13 @@
   .mark-check, .mark-dislike {
     flex: 0 0 auto; width: auto; height: auto; padding: 0.1rem 0.15rem; margin: 0;
     border: none; background: transparent; box-shadow: none;
-    color: var(--border); font-size: 1rem; line-height: 1; cursor: pointer;
+    color: var(--border); line-height: 1; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
   }
+  .mark-check { font-size: 1rem; }
   .mark-check::before { content: "✓"; }
-  .mark-dislike::before { content: "×"; }
+  .mark-dislike { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
+  .mark-dislike::before { content: "X"; }
   .mark-check:hover, .mark-dislike:hover { color: var(--accent); }
   .mark-check.is-active, .mark-dislike.is-active { color: var(--accent); }
   .newsletter-footer {
@@ -278,8 +280,10 @@
     .toggle input:checked + .toggle-rail .toggle-thumb { transform: translateX(18px); }
     .newsletter-body { padding: 0.65rem 0.85rem 0.85rem; }
     .mark-check, .mark-dislike {
-      min-width: 44px; min-height: 44px; padding: 0.5rem; font-size: 1.15rem;
+      min-width: 44px; min-height: 44px; padding: 0.5rem;
     }
+    .mark-check { font-size: 1.15rem; }
+    .mark-dislike { font-size: 1.55rem; }
     .mark-check.mark-check-lg { font-size: 1.45rem; min-width: 48px; min-height: 48px; }
     .add-card { padding: 1.5rem 1rem; }
     .add-row { flex-direction: column; }
