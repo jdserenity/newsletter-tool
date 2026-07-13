@@ -46,13 +46,17 @@ def fetch_account_week(conn, client, account, week_start, week_end, now=None, lo
   """Fetch one account's tweets for the period. Returns cost incurred (USD)."""
   now = now or datetime.now(timezone.utc)
   cost = 0.0
+  user_id = db.owner_user_id(conn)
+  if user_id and not db.billing_access_ok(db.get_billing_account(conn, user_id=user_id)):
+    if log: log(f"  @{account['handle']}: skipped — API budget exhausted")
+    return 0.0
   handle = account["handle"]
   if log: log(f"Fetching @{handle} ({week_start[:10]} → {week_end[:10]})...")
   if not account["x_user_id"]:
     if log: log(f"  @{handle}: looking up user id...")
     user, _ = client.get_user_by_handle(account["handle"])
     uc = COST_PER_USER_READ if db.billable_user_lookup(conn, account["id"], now=now) else 0.0
-    db.record_api_call(conn, account["id"], "users/by/username", 1 if uc else 0, uc); cost += uc
+    db.record_api_call(conn, account["id"], "users/by/username", 1 if uc else 0, uc, user_id=user_id); cost += uc
     db.set_account_identity(conn, account["id"], user["id"], user.get("name", account["handle"]))
     account = db.get_account(conn, account_id=account["id"])
     if log: log(f"  @{handle}: x_user_id={user['id']}")
@@ -62,7 +66,7 @@ def fetch_account_week(conn, client, account, week_start, week_end, now=None, lo
   tweet_ids = _post_read_tweet_ids(tweets)
   c = db.post_read_cost(conn, tweet_ids, now=now)
   billable = db.billable_post_count(conn, tweet_ids, now=now)
-  db.record_api_call(conn, account["id"], "users/:id/tweets", billable, c); cost += c
+  db.record_api_call(conn, account["id"], "users/:id/tweets", billable, c, user_id=user_id); cost += c
   for t in tweets: t["kind"] = classify_tweet(t)
   db.save_tweets(conn, account["id"], tweets, fetched_at=now)
   if log: log(f"  @{handle}: stored {len(tweets)} tweets, API ${cost:.3f}")
@@ -134,6 +138,9 @@ def run_weekly_fetch(conn, client=None, now=None, db_path=None, log=None):
   for account in accounts:
     try:
       costs[account["id"]] = fetch_account_week(conn, client, account, week_start, week_end, now=now, log=log)
+    except db.BudgetExceededError as e:
+      errors[account["handle"]] = e
+      if log: log(f"  @{account['handle']}: FAILED — {e}")
     except Exception as e:
       errors[account["handle"]] = e
       if log: log(f"  @{account['handle']}: FAILED — {e}")

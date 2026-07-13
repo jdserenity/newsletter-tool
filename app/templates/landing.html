@@ -43,7 +43,12 @@
     <p class="landing-lede">The people you follow — without the machine that wants you back.</p>
     <p class="landing-price">API Costs + 1USD service fee. Extremely reasonable.</p>
     <div class="landing-cta">
-      <a class="landing-enter" href="/auth/login/start">Enter with X</a>
+      {% if billing_enabled %}
+      <a class="landing-enter" href="/billing/checkout">Enter now</a>
+      <p class="landing-return"><a href="/auth/login/start?returning=1">Already in? Sign in with X</a></p>
+      {% else %}
+      <a class="landing-enter" href="/auth/login/start">Enter now</a>
+      {% endif %}
     </div>
   </main>
 

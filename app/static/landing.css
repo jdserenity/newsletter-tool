@@ -220,6 +220,20 @@ body.page-landing {
 
 .landing-enter:active { transform: translateY(0); }
 
+.landing-return {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.landing-return a {
+  color: var(--land-ink-soft);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(20, 34, 31, 0.2);
+}
+
+.landing-return a:hover { color: var(--land-ember-deep); }
+
 .landing-foot {
   position: relative;
   z-index: 1;

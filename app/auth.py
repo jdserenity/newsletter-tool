@@ -26,6 +26,9 @@ SESSION_USERNAME = "username"
 SESSION_NAME = "name"
 SESSION_OAUTH_STATE = "oauth_state"
 SESSION_CODE_VERIFIER = "code_verifier"
+SESSION_BILLING_ENTRY_VERIFIED = "billing_entry_verified"
+SESSION_BILLING_CHECKOUT_SESSION = "billing_checkout_session_id"
+SESSION_RETURNING_LOGIN = "billing_returning_login"
 
 class AuthConfig:
   def __init__(self, enabled, client_id, client_secret, callback_url, session_secret, scopes=None, http=None):
@@ -188,7 +191,7 @@ def http_client(config):
 # /editions/ is public too: feed item links deep-link here; content is already in the feed.
 # Exact `/` is public: signed-out visitors see the landing page; signed-in users get the app.
 PUBLIC_EXACT = ("/",)
-PUBLIC_PREFIXES = ("/auth/", "/feeds/", "/editions/", "/static/")
+PUBLIC_PREFIXES = ("/auth/", "/feeds/", "/editions/", "/static/", "/billing/")
 class RequireAuthMiddleware:
   def __init__(self, app, config: AuthConfig):
     self.app = app
