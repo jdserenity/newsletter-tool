@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+import calendar
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -112,6 +113,50 @@ def _migrate_schema(conn):
     conn.execute("ALTER TABLE oauth_session ADD COLUMN expires_at TEXT"); conn.commit()
   _ensure_app_settings(conn)
   _repair_inflated_api_call_costs(conn)
+  _ensure_billing_tables(conn)
+
+def _ensure_billing_tables(conn):
+  conn.execute("""CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    x_user_id TEXT NOT NULL UNIQUE,
+    username TEXT NOT NULL,
+    name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')))""")
+  conn.execute("""CREATE TABLE IF NOT EXISTS billing_accounts (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+    stripe_customer_id TEXT,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    budget_usd REAL NOT NULL DEFAULT 0,
+    spent_usd REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    cancelled_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')))""")
+  conn.execute("""CREATE TABLE IF NOT EXISTS billing_payments (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    checkout_session_id TEXT NOT NULL UNIQUE,
+    payment_intent_id TEXT,
+    kind TEXT NOT NULL,
+    amount_usd REAL NOT NULL,
+    budget_credit_usd REAL NOT NULL DEFAULT 0,
+    fee_usd REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'paid',
+    paid_at TEXT NOT NULL DEFAULT (datetime('now')))""")
+  conn.execute("""CREATE TABLE IF NOT EXISTS billing_refunds (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    billing_account_id INTEGER NOT NULL REFERENCES billing_accounts(id),
+    amount_usd REAL NOT NULL,
+    stripe_refund_id TEXT,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    refunded_at TEXT NOT NULL DEFAULT (datetime('now')))""")
+  acols = {r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()}
+  if "user_id" not in acols:
+    conn.execute("ALTER TABLE accounts ADD COLUMN user_id INTEGER REFERENCES users(id)"); conn.commit()
+  conn.commit()
 
 def _ensure_app_settings(conn):
   conn.execute(
@@ -263,7 +308,14 @@ def billable_user_lookup(conn, account_id, now=None):
     (account_id, cutoff)).fetchone()
   return row is None
 
-def record_api_call(conn, account_id, endpoint, units, cost_usd):
+def record_api_call(conn, account_id, endpoint, units, cost_usd, user_id=None):
+  if cost_usd > 0 and user_id is not None:
+    billing = get_billing_account(conn, user_id=user_id)
+    if not billing_access_ok(billing):
+      raise BudgetExceededError("No active API budget")
+    if remaining_budget(billing) + 1e-9 < cost_usd:
+      raise BudgetExceededError("API budget exhausted")
+    add_billing_spend(conn, billing["id"], cost_usd)
   conn.execute("INSERT INTO api_calls (account_id, endpoint, units, cost_usd) VALUES (?, ?, ?, ?)",
     (account_id, endpoint, units, cost_usd)); conn.commit()
 
@@ -507,3 +559,181 @@ def database_overview(conn, week_start=None, week_end=None):
     "api_cost_usd": totals["api_cost_usd"],
     "oauth_signed_in": get_oauth_session(conn) is not None,
   }
+
+# --- billing ---
+
+class BudgetExceededError(Exception):
+  pass
+
+def _parse_iso_utc(value):
+  if not value: return None
+  s = value.strip()
+  if s.endswith("Z"): s = s[:-1] + "+00:00"
+  return datetime.fromisoformat(s).astimezone(timezone.utc)
+
+def _fmt_iso_utc(dt):
+  return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+def billing_period_end(period_start):
+  """Anniversary billing: one calendar month after period_start."""
+  dt = period_start if isinstance(period_start, datetime) else _parse_iso_utc(period_start)
+  month = dt.month + 1; year = dt.year
+  if month > 12: month = 1; year += 1
+  day = min(dt.day, calendar.monthrange(year, month)[1])
+  return dt.replace(year=year, month=month, day=day, tzinfo=timezone.utc)
+
+def upsert_user(conn, x_user_id, username, name=None):
+  conn.execute(
+    """INSERT INTO users (x_user_id, username, name) VALUES (?, ?, ?)
+       ON CONFLICT(x_user_id) DO UPDATE SET username = excluded.username,
+         name = COALESCE(excluded.name, users.name)""",
+    (str(x_user_id), username, name))
+  conn.commit()
+  return get_user_by_x_id(conn, x_user_id)["id"]
+
+def get_user_by_x_id(conn, x_user_id):
+  row = conn.execute("SELECT * FROM users WHERE x_user_id = ?", (str(x_user_id),)).fetchone()
+  return dict(row) if row else None
+
+def get_user(conn, user_id):
+  row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+  return dict(row) if row else None
+
+def owner_user_id(conn):
+  """User id for the signed-in oauth owner, if linked."""
+  oauth = get_oauth_session(conn)
+  if not oauth: return None
+  user = get_user_by_x_id(conn, oauth["x_user_id"])
+  return user["id"] if user else None
+
+def create_billing_account(conn, user_id, stripe_customer_id, period_start, period_end,
+                           budget_usd=0.0, spent_usd=0.0, status="active"):
+  conn.execute(
+    """INSERT INTO billing_accounts (user_id, stripe_customer_id, period_start, period_end,
+         budget_usd, spent_usd, status) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+    (user_id, stripe_customer_id, period_start, period_end, budget_usd, spent_usd, status))
+  conn.commit()
+
+def get_billing_account(conn, user_id=None, x_user_id=None):
+  if user_id is not None:
+    row = conn.execute("SELECT * FROM billing_accounts WHERE user_id = ?", (user_id,)).fetchone()
+  elif x_user_id is not None:
+    row = conn.execute(
+      """SELECT b.* FROM billing_accounts b JOIN users u ON u.id = b.user_id
+         WHERE u.x_user_id = ?""", (str(x_user_id),)).fetchone()
+  else: return None
+  return dict(row) if row else None
+
+def remaining_budget(billing_row):
+  if not billing_row: return 0.0
+  return max(0.0, float(billing_row["budget_usd"]) - float(billing_row["spent_usd"]))
+
+def unused_budget_usd(billing_row):
+  return remaining_budget(billing_row)
+
+def billing_access_ok(billing_row, now=None):
+  if not billing_row: return False
+  now = now or datetime.now(timezone.utc)
+  if _parse_iso_utc(billing_row["period_end"]) <= now: return False
+  if billing_row["status"] == "exhausted" and remaining_budget(billing_row) <= 0: return False
+  if billing_row["status"] == "closed": return False
+  return True
+
+def add_billing_spend(conn, billing_account_id, amount_usd):
+  conn.execute(
+    """UPDATE billing_accounts SET spent_usd = spent_usd + ?, updated_at = datetime('now')
+       WHERE id = ?""", (amount_usd, billing_account_id))
+  row = conn.execute("SELECT * FROM billing_accounts WHERE id = ?", (billing_account_id,)).fetchone()
+  if row and remaining_budget(dict(row)) <= 1e-9:
+    conn.execute("UPDATE billing_accounts SET status = 'exhausted' WHERE id = ?", (billing_account_id,))
+  conn.commit()
+
+def _payment_exists(conn, checkout_session_id):
+  return conn.execute("SELECT 1 FROM billing_payments WHERE checkout_session_id = ?",
+    (checkout_session_id,)).fetchone() is not None
+
+def apply_entry_payment(conn, user_id, checkout_session_id, payment_intent_id, amount_usd,
+                        stripe_customer_id, paid_at=None):
+  if _payment_exists(conn, checkout_session_id): return get_billing_account(conn, user_id=user_id)
+  paid_at = paid_at or datetime.now(timezone.utc)
+  ps = _fmt_iso_utc(paid_at); pe = _fmt_iso_utc(billing_period_end(paid_at))
+  existing = get_billing_account(conn, user_id=user_id)
+  if existing:
+    conn.execute(
+      """UPDATE billing_accounts SET stripe_customer_id = COALESCE(?, stripe_customer_id),
+           budget_usd = budget_usd + ?, status = 'active', updated_at = datetime('now')
+         WHERE user_id = ?""",
+      (stripe_customer_id, amount_usd, user_id))
+  else:
+    create_billing_account(conn, user_id, stripe_customer_id, ps, pe, budget_usd=amount_usd, spent_usd=0.0)
+  conn.execute(
+    """INSERT INTO billing_payments (user_id, checkout_session_id, payment_intent_id, kind,
+         amount_usd, budget_credit_usd, fee_usd) VALUES (?, ?, ?, 'entry', ?, ?, 0)""",
+    (user_id, checkout_session_id, payment_intent_id, amount_usd, amount_usd))
+  conn.commit()
+  return get_billing_account(conn, user_id=user_id)
+
+def apply_topup_payment(conn, user_id, checkout_session_id, payment_intent_id, budget_credit_usd,
+                        fee_usd, amount_usd):
+  if _payment_exists(conn, checkout_session_id): return get_billing_account(conn, user_id=user_id)
+  billing = get_billing_account(conn, user_id=user_id)
+  if not billing: raise ValueError("billing account required for top-up")
+  now = datetime.now(timezone.utc)
+  ps = _fmt_iso_utc(now); pe = _fmt_iso_utc(billing_period_end(now))
+  conn.execute(
+    """UPDATE billing_accounts SET period_start = ?, period_end = ?, budget_usd = ?, spent_usd = 0,
+         status = 'active', cancelled_at = NULL, updated_at = datetime('now') WHERE user_id = ?""",
+    (ps, pe, budget_credit_usd, user_id))
+  conn.execute(
+    """INSERT INTO billing_payments (user_id, checkout_session_id, payment_intent_id, kind,
+         amount_usd, budget_credit_usd, fee_usd) VALUES (?, ?, ?, 'topup', ?, ?, ?)""",
+    (user_id, checkout_session_id, payment_intent_id, amount_usd, budget_credit_usd, fee_usd))
+  conn.commit()
+  return get_billing_account(conn, user_id=user_id)
+
+def cancel_billing(conn, user_id):
+  conn.execute(
+    """UPDATE billing_accounts SET status = 'cancelled', cancelled_at = datetime('now'),
+         updated_at = datetime('now') WHERE user_id = ?""", (user_id,))
+  conn.commit()
+
+def billing_accounts_due_for_close(conn, now=None):
+  now = now or datetime.now(timezone.utc)
+  rows = conn.execute("SELECT * FROM billing_accounts").fetchall()
+  due = []
+  for r in rows:
+    if _parse_iso_utc(r["period_end"]) <= now: due.append(dict(r))
+  return due
+
+def record_period_refund(conn, user_id, billing_account_id, amount_usd, period_start, period_end,
+                         stripe_refund_id=None):
+  conn.execute(
+    """INSERT INTO billing_refunds (user_id, billing_account_id, amount_usd, stripe_refund_id,
+         period_start, period_end) VALUES (?, ?, ?, ?, ?, ?)""",
+    (user_id, billing_account_id, amount_usd, stripe_refund_id, period_start, period_end))
+  conn.commit()
+
+def close_billing_period(conn, user_id, now=None):
+  """End current period after refunds are handled elsewhere."""
+  billing = get_billing_account(conn, user_id=user_id)
+  if not billing: return None
+  conn.execute(
+    """UPDATE billing_accounts SET budget_usd = 0, spent_usd = 0, status = 'closed',
+         updated_at = datetime('now') WHERE user_id = ?""", (user_id,))
+  conn.commit()
+  return get_billing_account(conn, user_id=user_id)
+
+def start_new_billing_period(conn, user_id, budget_usd, now=None):
+  now = now or datetime.now(timezone.utc)
+  ps = _fmt_iso_utc(now); pe = _fmt_iso_utc(billing_period_end(now))
+  conn.execute(
+    """UPDATE billing_accounts SET period_start = ?, period_end = ?, budget_usd = ?, spent_usd = 0,
+         status = 'active', cancelled_at = NULL, updated_at = datetime('now') WHERE user_id = ?""",
+    (ps, pe, budget_usd, user_id)); conn.commit()
+  return get_billing_account(conn, user_id=user_id)
+
+def list_payments_for_user(conn, user_id, kind=None):
+  q = "SELECT * FROM billing_payments WHERE user_id = ?"; params = [user_id]
+  if kind: q += " AND kind = ?"; params.append(kind)
+  q += " ORDER BY paid_at DESC"
+  return [dict(r) for r in conn.execute(q, params).fetchall()]
