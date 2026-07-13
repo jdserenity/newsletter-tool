@@ -6,8 +6,8 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - **Name (UI):** More Mentally Stable X Experience
 - Personal single-user tool: selected X accounts → clean newsletters (web + RSS). Email out of scope. No multi-tenant.
 - Hosted on owner VPS as subdomain of personal domain.
-- **Landing (`/` signed-out):** artistic public page for anonymous visitors. Signed-in users get the app carousel at the same path. CTA → `/auth/login/start`. Logout redirects to `/` (landing).
-- **Pricing (stated on landing):** “API Costs + 1USD service fee. Extremely reasonable.” Stripe checkout not wired yet (planned).
+- **Landing (`/` signed-out):** artistic public page. **Enter now** → `/billing/checkout` ($1 Stripe hosted Checkout). **Already in?** → `/auth/login/start?returning=1`. After paid entry → X OAuth. Logout → `/`.
+- **Pricing (stated on landing):** “API Costs + 1USD service fee. Extremely reasonable.” **Entry Checkout:** $1 hosted Stripe Checkout = $1 prepaid API budget (anniversary billing month). **Top-up:** user-chosen API budget + $1 service fee when exhausted or after period close. OAuth only after entry payment (or returning user with active budget). Unused API budget refunded at period end via Stripe partial refund. Cancel keeps access until `period_end`.
 - **Attribution (landing footer):** “Created by J.D. Diamari for Good Power Unlimited, So That Evil May Be a Solved Problem” — J.D. Diamari → `https://x.com/diamaribuilds`; full company phrase (including motto) → `https://x.com/gdpwrultd`.
 - Add/remove tracked X accounts. One **edition** per account per fetch period (`editions` table; `week_start`/`week_end` columns are the period bounds).
 - **Cadence** (global `app_settings`): `twice_weekly` (default) or `weekly`. Twice: editions on Mon and Thu (UTC). Periods are Thu→Mon and Mon→Thu. Weekly: Mon→Mon only (job Mon only).
@@ -20,7 +20,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - Favicon / home-screen icon: serif **Y** on cream (`/static/favicon.svg` + PNG). Same mark for iOS Add to Home Screen via `apple-touch-icon.png` (180) + `site.webmanifest` (`icon-192` / `icon-512`).
 
 ## Stack
-- Python 3.11+ / FastAPI / Jinja2 / SQLite / APScheduler / httpx
+- Python 3.11+ / FastAPI / Jinja2 / SQLite / APScheduler / httpx / stripe
 - No JS framework, no frontend build. Static: `carousel.js`, `home.js`
 - Single uvicorn process on VPS
 
@@ -31,6 +31,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 | `app/db.py` | SQLite schema, queries, path resolution, cost helpers |
 | `app/newsletter.py` | Pure: tweets + settings → edition items; unread-first sort; media/quote shaping |
 | `app/rss.py` | RSS XML from editions (no X API) |
+| `app/billing.py` | Stripe Checkout (entry + top-up), webhook, period-close refunds |
 | `app/auth.py` | OAuth2 PKCE, session, `RequireAuthMiddleware`, public prefixes |
 | `app/user_actions.py` | Owner like/unlike on X (checkmark click) |
 | `app/scheduler.py` | Cron Mon+Thu 06:00 UTC; skips Thu when cadence is weekly; `run_job()` for manual |
@@ -45,7 +46,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 
 ## SQLite
 - Path: `DATABASE_PATH` env, else `~/.local/share/newsletter-tool/newsletter.db` (outside repo; shared across worktrees).
-- Tables: `accounts`, `tweets`, `editions`, `api_calls`, `oauth_session` (singleton id=1), `app_settings` (singleton id=1: `cadence`, `append_unread`), `liked_tweets`, `disliked_tweets`, `read_tweets`, `read_newsletters`
+- Tables: `accounts`, `tweets`, `editions`, `api_calls`, `oauth_session` (singleton id=1), `app_settings` (singleton id=1: `cadence`, `append_unread`), `users`, `billing_accounts`, `billing_payments`, `billing_refunds`, `liked_tweets`, `disliked_tweets`, `read_tweets`, `read_newsletters`
 - `accounts` defaults: quotes on, replies/retweets off; optional legacy `followed_at` (unused)
 - `app_settings` defaults: `cadence='twice_weekly'`, `append_unread=1`
 - Legacy `digests` → `editions` rename on connect
@@ -53,7 +54,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 
 ## Routes
 **Public exact:** `/` (landing when signed out; app when signed in)  
-**Public prefixes** (`PUBLIC_PREFIXES`): `/auth/`, `/feeds/`, `/editions/`, `/static/`  
+**Public prefixes** (`PUBLIC_PREFIXES`): `/auth/`, `/feeds/`, `/editions/`, `/static/`, `/billing/`  
 **Auth required** (when enabled): everything else → 303 `/auth/login`
 
 | Method | Path | Notes |
@@ -72,7 +73,14 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 | POST | `/accounts/{id}/read-newsletter` | `week_start`; hides card for that week |
 | GET | `/editions/{id}` | Public deep link; like/dislike UI only if signed in |
 | GET | `/feeds/{id}.xml` | Public RSS; CDATA HTML bodies; RFC 822 pubDate; Cache-Control 300 |
-| GET/POST | `/auth/login`, `/auth/login/start`, `/auth/callback`, `/auth/logout` | OAuth PKCE; logout → `/` |
+| GET | `/billing/checkout` | Entry $1 → Stripe hosted Checkout |
+| GET | `/billing/success` | Verify paid session → OAuth start |
+| GET | `/billing/cancel` | → `/` |
+| POST | `/billing/webhook` | Stripe `checkout.session.completed` (idempotent) |
+| POST | `/billing/topup` | Auth; form `budget_usd` → budget+$1 Checkout |
+| GET | `/billing/topup/success` | Apply top-up payment |
+| POST | `/billing/cancel-subscription` | Auth; cancel at period end |
+| GET/POST | `/auth/login`, `/auth/login/start`, `/auth/callback`, `/auth/logout` | OAuth PKCE; `login/start` gated on entry pay unless `?returning=1`; logout → `/` |
 
 ## UI behavior
 - **Out-links** (X profile/tweet/media, RSS): `target="_blank" rel="noopener noreferrer"`. In-app nav same tab.
@@ -96,11 +104,11 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 ## Run / deploy
 ```bash
 ./scripts/setup.sh
-cp .env.example .env   # X_BEARER_TOKEN + OAuth vars
+cp .env.example .env   # X_BEARER_TOKEN + OAuth + Stripe vars
 source venv/bin/activate
 news-dev               # local server
 news-manual-fetch      # fetch + build newsletters
 news-db-status         # DB overview
 pytest
 ```
-VPS: one uvicorn; set env vars + `DATABASE_PATH`; register production OAuth callback in X Developer Console; reverse-proxy subdomain → app port.
+VPS: one uvicorn; set env vars + `DATABASE_PATH`; register production OAuth callback in X Developer Console; Stripe webhook → `POST /billing/webhook`; reverse-proxy subdomain → app port.
