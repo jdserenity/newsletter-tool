@@ -171,16 +171,21 @@
     if (!tweetId || !action) return;
     var tweet = btn.closest('.tweet');
     var undo = btn.classList.contains('is-active');
+    var optimisticLike = !undo && action === 'like';
+    if (optimisticLike && tweet) setFeedbackUi(tweet, 'like');
     btn.disabled = true;
     var req;
     if (undo) req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/read', { read: 'false' });
     else if (action === 'like') req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/like');
     else req = postForm('/tweets/' + encodeURIComponent(tweetId) + '/dislike');
     req.then(function() {
-        if (tweet) setFeedbackUi(tweet, undo ? null : action);
+        if (tweet && !optimisticLike) setFeedbackUi(tweet, undo ? null : action);
       })
       .catch(function(err) {
-        if (!undo && action === 'like') showActionError(err.message || 'Could not like this tweet on X.');
+        if (optimisticLike) {
+          if (tweet) setFeedbackUi(tweet, null);
+          showActionError(err.message || 'Could not like this tweet on X.');
+        }
       })
       .finally(function() { btn.disabled = false; });
   });

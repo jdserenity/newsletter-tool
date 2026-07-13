@@ -508,3 +508,6 @@ def test_home_loads_home_js_for_in_place_actions(client):
   assert "data-read-at" in js.text
   assert "showActionError" in js.text
   assert "action-toast" in js.text
+  assert "optimisticLike" in js.text
+  assert "if (optimisticLike && tweet) setFeedbackUi(tweet, 'like');" in js.text
+  assert "if (optimisticLike) {" in js.text
