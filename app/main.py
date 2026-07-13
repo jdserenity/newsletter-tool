@@ -110,7 +110,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     @app.post("/auth/logout")
     def auth_logout(request: Request):
       auth.clear_session(request)
-      return RedirectResponse("/auth/login", status_code=303)
+      return RedirectResponse("/", status_code=303)
 
   def newsletter_cards(c):
     from app.fetch.runner import period_bounds
@@ -141,6 +141,9 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
 
   @app.get("/", response_class=HTMLResponse)
   def home(request: Request):
+    # Signed-out visitors (auth on) see the landing page; signed-in users get the app.
+    if auth_config.enabled and not auth.session_user(request):
+      return render(request, "landing.html", {})
     c = conn()
     repair_missing_editions(c)  # local only — no X API
     after_authenticated_request(c, request)

@@ -186,6 +186,8 @@ def http_client(config):
 # /feeds/ must stay public: RSS readers do not send session cookies, so requiring
 # auth made them receive the HTML login page (or a redirect) and report "feed not found".
 # /editions/ is public too: feed item links deep-link here; content is already in the feed.
+# Exact `/` is public: signed-out visitors see the landing page; signed-in users get the app.
+PUBLIC_EXACT = ("/",)
 PUBLIC_PREFIXES = ("/auth/", "/feeds/", "/editions/", "/static/")
 class RequireAuthMiddleware:
   def __init__(self, app, config: AuthConfig):
@@ -196,7 +198,7 @@ class RequireAuthMiddleware:
     if scope["type"] != "http" or not self.config.enabled:
       return await self.app(scope, receive, send)
     path = scope.get("path", "")
-    if any(path.startswith(p) for p in PUBLIC_PREFIXES):
+    if path in PUBLIC_EXACT or any(path.startswith(p) for p in PUBLIC_PREFIXES):
       return await self.app(scope, receive, send)
     from starlette.requests import Request
     from starlette.responses import RedirectResponse
