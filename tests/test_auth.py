@@ -58,11 +58,11 @@ def test_unauthenticated_home_shows_landing(auth_client):
   assert 'href="https://x.com/gdpwrultd"' in r.text
   assert "Created by" in r.text
   assert "J.D. Diamari" in r.text
-  assert "Good Power Unlimited" in r.text
-  assert "So That Evil May Be a Solved Problem" in r.text
+  assert "Good Power Unlimited, So That Evil May Be a Solved Problem" in r.text
   assert "/auth/login/start" in r.text
-  # Pricing: visitor covers X API cost; one dollar goes to the creator.
-  assert "API" in r.text and ("$1" in r.text or "1 dollar" in r.text.lower() or "one dollar" in r.text.lower())
+  # Pricing: API costs + 1USD service fee.
+  assert "API Costs + 1USD service fee" in r.text
+  assert "Extremely reasonable" in r.text
   # Signed-out visitors must not see the app carousel chrome.
   assert 'class="carousel"' not in r.text
   assert "Signed in as" not in r.text

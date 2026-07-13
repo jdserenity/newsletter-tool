@@ -7,8 +7,8 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - Personal single-user tool: selected X accounts → clean newsletters (web + RSS). Email out of scope. No multi-tenant.
 - Hosted on owner VPS as subdomain of personal domain.
 - **Landing (`/` signed-out):** artistic public page for anonymous visitors. Signed-in users get the app carousel at the same path. CTA → `/auth/login/start`. Logout redirects to `/` (landing).
-- **Pricing (stated on landing):** visitor covers their X API costs; **$1 USD / month** to the creator. Stripe checkout not wired yet (planned).
-- **Attribution (landing footer):** “Created by J.D. Diamari for Good Power Unlimited, So That Evil May Be a Solved Problem” — J.D. Diamari → `https://x.com/diamaribuilds`; Good Power Unlimited → `https://x.com/gdpwrultd`.
+- **Pricing (stated on landing):** “API Costs + 1USD service fee. Extremely reasonable.” Stripe checkout not wired yet (planned).
+- **Attribution (landing footer):** “Created by J.D. Diamari for Good Power Unlimited, So That Evil May Be a Solved Problem” — J.D. Diamari → `https://x.com/diamaribuilds`; full company phrase (including motto) → `https://x.com/gdpwrultd`.
 - Add/remove tracked X accounts. One **edition** per account per fetch period (`editions` table; `week_start`/`week_end` columns are the period bounds).
 - **Cadence** (global `app_settings`): `twice_weekly` (default) or `weekly`. Twice: editions on Mon and Thu (UTC). Periods are Thu→Mon and Mon→Thu. Weekly: Mon→Mon only (job Mon only).
 - **Append unread** (global `app_settings`, default on): when building a new edition, unread tweets from the previous edition are included; when off, only the current period’s tweets (unread from prior editions are dropped from the new edition).
