@@ -24,7 +24,8 @@ Not email. Not multi-user. Hosted on your VPS as a subdomain.
 
 | Screen | What you see |
 | --- | --- |
-| **Home** `/` | Horizontal carousel: one card per tracked account (toggles, API cost, latest edition’s posts). Extra “Add account” card with cost estimate. |
+| **Landing** `/` (signed out) | Public artistic page: product name, short pitch, pricing (you cover X API costs + $1/month to the creator), Enter with X. Footer attribution with X profile links. Signed-in visitors never see this — same URL shows Home. |
+| **Home** `/` (signed in) | Horizontal carousel: one card per tracked account (toggles, API cost, latest edition’s posts). Extra “Add account” card with cost estimate. |
 | **Settings** `/settings` | Newsletter cadence (once/week or twice/week Mon+Thu; default twice), whether unread tweets carry into the next edition (default yes), list/remove accounts, month’s total API spend. Header button becomes **Home**. |
 | **Edition** `/editions/{id}` | Single period for RSS deep links (public). Like/dislike only if signed in. |
 | **RSS** `/feeds/{id}.xml` | Public feed per account (no login cookie). |
