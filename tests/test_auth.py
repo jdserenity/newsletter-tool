@@ -49,8 +49,35 @@ def auth_client(tmp_path, monkeypatch):
   with TestClient(app) as c:
     yield c
 
-def test_unauthenticated_home_redirects_to_login(auth_client):
+def test_unauthenticated_home_shows_landing(auth_client):
   r = auth_client.get("/", follow_redirects=False)
+  assert r.status_code == 200
+  assert "More Mentally Stable X Experience" in r.text
+  assert "landing" in r.text
+  assert 'href="https://x.com/diamaribuilds"' in r.text
+  assert 'href="https://x.com/gdpwrultd"' in r.text
+  assert "Created by" in r.text
+  assert "J.D. Diamari" in r.text
+  assert "Good Power Unlimited, So That Evil May Be a Solved Problem" in r.text
+  assert "Enter now" in r.text
+  assert "/billing/checkout" in r.text or "/auth/login/start" in r.text
+  # Pricing: API costs + 1USD service fee.
+  assert "API Costs + 1USD service fee" in r.text
+  assert "Extremely reasonable" in r.text
+  # Signed-out visitors must not see the app carousel chrome.
+  assert 'class="carousel"' not in r.text
+  assert "Signed in as" not in r.text
+
+def test_authenticated_home_shows_app_not_landing(auth_client, monkeypatch):
+  _login_auth_client(auth_client, monkeypatch)
+  r = auth_client.get("/", follow_redirects=False)
+  assert r.status_code == 200
+  assert 'class="carousel"' in r.text or 'id="carousel"' in r.text or "Signed in as" in r.text
+  assert "So That Evil May Be a Solved Problem" not in r.text
+  assert 'class="landing"' not in r.text
+
+def test_settings_still_requires_login(auth_client):
+  r = auth_client.get("/settings", follow_redirects=False)
   assert r.status_code == 303
   assert r.headers["location"] == "/auth/login"
 
@@ -204,4 +231,9 @@ def test_logout_clears_session(auth_client, monkeypatch):
   assert auth_client.get("/").status_code == 200
   r = auth_client.post("/auth/logout", follow_redirects=False)
   assert r.status_code == 303
-  assert auth_client.get("/", follow_redirects=False).status_code == 303
+  assert r.headers["location"] == "/"
+  # After logout, `/` is the public landing page again (not a redirect to login).
+  home = auth_client.get("/", follow_redirects=False)
+  assert home.status_code == 200
+  assert "landing" in home.text
+  assert "Signed in as" not in home.text

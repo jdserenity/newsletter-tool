@@ -23,9 +23,19 @@ def run_job(db_path=None, now=None):
     return run_weekly_fetch(conn, now=now, db_path=db_path)
   finally: conn.close()
 
-def start_scheduler(db_path=None):
+def run_billing_close(db_path=None, now=None):
+  from app import billing, db
+  config = billing.BillingConfig.from_env()
+  if not config.configured(): return []
+  conn = db.connect(db_path)
+  try: return billing.close_due_periods(config, conn, now=now)
+  finally: conn.close()
+
+def start_scheduler(db_path=None, billing_enabled=False):
   scheduler = BackgroundScheduler(timezone="UTC")
   scheduler.add_job(run_job, "cron", day_of_week="mon,thu", hour=6,
     kwargs={"db_path": db_path}, id="scheduled_fetch")
+  if billing_enabled:
+    scheduler.add_job(run_billing_close, "cron", hour=7, kwargs={"db_path": db_path}, id="billing_close")
   scheduler.start()
   return scheduler

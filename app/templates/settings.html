@@ -15,6 +15,33 @@
     </div>
   </div>
 
+  {% if billing_info %}
+  <h3>API budget</h3>
+  <div class="card app-settings">
+    {% if billing_notice == 'required' %}
+    <p class="muted">Your API budget is exhausted or your billing period ended. Top up to continue.</p>
+    {% elif billing_notice == 'topped_up' %}
+    <p class="muted">Top-up received. Your new API budget is active.</p>
+    {% elif billing_notice == 'cancelled' %}
+    <p class="muted">Cancellation noted. You keep access until your billing period ends; unused budget is refunded then.</p>
+    {% endif %}
+    <p><strong>${{ "%.2f"|format(billing_info.remaining) }}</strong> remaining
+      of <strong>${{ "%.2f"|format(billing_info.budget) }}</strong>
+      (spent ${{ "%.2f"|format(billing_info.spent) }})</p>
+    <p class="muted">Billing period ends {{ billing_info.period_end }}{% if billing_info.cancelled %} · cancelled{% endif %}</p>
+    <form method="post" action="/billing/topup" class="add-row">
+      <label>Top-up API budget ($)</label>
+      <input type="number" name="budget_usd" min="1" max="500" step="1" value="5" required>
+      <button type="submit">Pay budget + $1 service fee</button>
+    </form>
+    {% if not billing_info.cancelled %}
+    <form method="post" action="/billing/cancel-subscription" style="margin-top:0.75rem">
+      <button class="ghost" type="submit">Cancel at period end</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <h3>Newsletter schedule</h3>
   <form method="post" action="/settings" class="card app-settings">
     <fieldset>

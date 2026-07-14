@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import auth, db
+from app import auth, billing, db
 from app.fetch.runner import repair_missing_editions
 from app.scheduler import start_scheduler
 from app.user_actions import LikeActionError, like_tweet_on_x, unlike_tweet_on_x
@@ -21,15 +21,19 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config=None):
+def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config=None,
+               billing_enabled=None, billing_config=None):
   path = str(db.resolve_db_path(db_path))
   auth_config = auth_config or auth.AuthConfig.from_env(enabled=auth_enabled)
+  billing_config = billing_config or billing.BillingConfig.from_env(enabled=billing_enabled)
   if auth_config.enabled and not auth_config.configured():
     raise RuntimeError("User auth is enabled but X_CLIENT_ID, X_CLIENT_SECRET, or SESSION_SECRET is missing")
+  if billing_config.enabled and not billing_config.configured():
+    raise RuntimeError("Billing is enabled but STRIPE_SECRET_KEY is missing")
 
   @asynccontextmanager
   async def lifespan(app):
-    scheduler = start_scheduler(path) if with_scheduler else None
+    scheduler = start_scheduler(path, billing_enabled=billing_config.enabled) if with_scheduler else None
     yield
     if scheduler: scheduler.shutdown(wait=False)
 
@@ -37,6 +41,7 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
   app.state.db_path = path
   app.state.auth_config = auth_config
+  app.state.billing_config = billing_config
 
   if auth_config.enabled:
     app.add_middleware(auth.RequireAuthMiddleware, config=auth_config)
@@ -77,7 +82,11 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       return render(request, "login.html", {})
 
     @app.get("/auth/login/start")
-    def auth_login_start(request: Request):
+    def auth_login_start(request: Request, returning: int = 0):
+      if billing_config.enabled:
+        if not (request.session.get(auth.SESSION_BILLING_ENTRY_VERIFIED) or returning):
+          return RedirectResponse("/billing/checkout", status_code=303)
+        if returning: request.session[auth.SESSION_RETURNING_LOGIN] = True
       state = secrets.token_urlsafe(32)
       verifier, challenge = auth.make_pkce_pair()
       request.session[auth.SESSION_OAUTH_STATE] = state
@@ -100,17 +109,111 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
         me = auth.fetch_me(http, token["access_token"])
       except Exception as e:
         raise HTTPException(400, f"OAuth token exchange failed: {e}") from e
+      c = conn()
+      user_id = db.upsert_user(c, me["id"], me["username"], me.get("name", ""))
+      billing_row = db.get_billing_account(c, user_id=user_id)
+      checkout_sid = request.session.get(auth.SESSION_BILLING_CHECKOUT_SESSION)
+      if billing_config.enabled and checkout_sid and request.session.get(auth.SESSION_BILLING_ENTRY_VERIFIED):
+        try:
+          sess = billing.retrieve_checkout_session(billing_config, checkout_sid)
+          billing.link_entry_payment_to_user(c, checkout_sid, user_id, stripe_customer_id=sess.get("customer"))
+        except Exception as e:
+          raise HTTPException(400, f"Billing link failed: {e}") from e
+        request.session.pop(auth.SESSION_BILLING_ENTRY_VERIFIED, None)
+        request.session.pop(auth.SESSION_BILLING_CHECKOUT_SESSION, None)
+      elif billing_config.enabled and not db.billing_access_ok(billing_row):
+        if request.session.pop(auth.SESSION_RETURNING_LOGIN, None):
+          return RedirectResponse("/settings?billing=required", status_code=303)
+        return RedirectResponse("/billing/checkout", status_code=303)
       auth.store_user_session(request, token, me)
-      db.save_oauth_session(conn(), me["id"], token["access_token"], token.get("refresh_token"),
+      db.save_oauth_session(c, me["id"], token["access_token"], token.get("refresh_token"),
         expires_at=auth.expires_at_from_token(token))
       request.session.pop(auth.SESSION_OAUTH_STATE, None)
       request.session.pop(auth.SESSION_CODE_VERIFIER, None)
+      request.session.pop(auth.SESSION_RETURNING_LOGIN, None)
       return RedirectResponse("/", status_code=303)
 
     @app.post("/auth/logout")
     def auth_logout(request: Request):
       auth.clear_session(request)
-      return RedirectResponse("/auth/login", status_code=303)
+      return RedirectResponse("/", status_code=303)
+
+  if billing_config.enabled:
+    @app.get("/billing/checkout")
+    def billing_checkout():
+      try:
+        session = billing.create_entry_checkout(billing_config)
+      except Exception as e:
+        raise HTTPException(502, f"Stripe checkout failed: {e}") from e
+      return RedirectResponse(session["url"], status_code=303)
+
+    @app.get("/billing/success")
+    def billing_success(request: Request, session_id: str = ""):
+      if not session_id: raise HTTPException(400, "Missing session_id")
+      try:
+        sess = billing.retrieve_checkout_session(billing_config, session_id)
+      except Exception as e:
+        raise HTTPException(400, f"Invalid checkout session: {e}") from e
+      if not billing.session_is_paid(sess):
+        return RedirectResponse("/billing/cancel", status_code=303)
+      request.session[auth.SESSION_BILLING_ENTRY_VERIFIED] = True
+      request.session[auth.SESSION_BILLING_CHECKOUT_SESSION] = session_id
+      return RedirectResponse("/auth/login/start", status_code=303)
+
+    @app.get("/billing/cancel")
+    def billing_cancel():
+      return RedirectResponse("/", status_code=303)
+
+    @app.post("/billing/webhook")
+    async def billing_webhook(request: Request):
+      payload = await request.body()
+      sig = request.headers.get("stripe-signature", "")
+      if not billing_config.webhook_secret:
+        raise HTTPException(500, "STRIPE_WEBHOOK_SECRET not configured")
+      try:
+        event = billing.verify_webhook(billing_config, payload, sig)
+      except Exception as e:
+        raise HTTPException(400, str(e)) from e
+      billing.handle_webhook_event(conn(), event)
+      return JSONResponse({"ok": True})
+
+    @app.get("/billing/topup/success")
+    def billing_topup_success(request: Request, session_id: str = ""):
+      if not session_id: raise HTTPException(400, "Missing session_id")
+      try:
+        sess = billing.retrieve_checkout_session(billing_config, session_id)
+      except Exception as e:
+        raise HTTPException(400, f"Invalid checkout session: {e}") from e
+      if billing.session_is_paid(sess):
+        billing.apply_paid_session(conn(), sess)
+      return RedirectResponse("/settings?billing=topped_up", status_code=303)
+
+    @app.post("/billing/topup")
+    def billing_topup(request: Request, budget_usd: float = Form(...)):
+      if not auth_config.enabled: raise HTTPException(400, "Auth required")
+      user = auth.session_user(request)
+      if not user: raise HTTPException(401, "Sign in required")
+      c = conn()
+      uid = db.upsert_user(c, user["x_user_id"], user["username"], user.get("name"))
+      acct = db.get_billing_account(c, user_id=uid)
+      if budget_usd < 1 or budget_usd > 500:
+        raise HTTPException(400, "Budget must be between $1 and $500")
+      try:
+        session = billing.create_topup_checkout(billing_config, uid,
+          acct["stripe_customer_id"] if acct else None, budget_usd)
+      except Exception as e:
+        raise HTTPException(502, f"Stripe checkout failed: {e}") from e
+      return RedirectResponse(session["url"], status_code=303)
+
+    @app.post("/billing/cancel-subscription")
+    def billing_cancel_subscription(request: Request):
+      if not auth_config.enabled: raise HTTPException(401, "Sign in required")
+      user = auth.session_user(request)
+      if not user: raise HTTPException(401, "Sign in required")
+      c = conn()
+      row = db.get_user_by_x_id(c, user["x_user_id"])
+      if row: db.cancel_billing(c, row["id"])
+      return RedirectResponse("/settings?billing=cancelled", status_code=303)
 
   def newsletter_cards(c):
     from app.fetch.runner import period_bounds
@@ -141,20 +244,40 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
 
   @app.get("/", response_class=HTMLResponse)
   def home(request: Request):
+    # Signed-out visitors (auth on) see the landing page; signed-in users get the app.
+    if auth_config.enabled and not auth.session_user(request):
+      return render(request, "landing.html", {"billing_enabled": billing_config.enabled})
     c = conn()
     repair_missing_editions(c)  # local only — no X API
     after_authenticated_request(c, request)
     return render(request, "home.html", {"cards": newsletter_cards(c)})
 
   @app.get("/settings", response_class=HTMLResponse)
-  def settings_page(request: Request):
+  def settings_page(request: Request, billing: str = ""):
     c = conn()
     accounts = db.list_accounts(c)
+    billing_info = None
+    if auth_config.enabled and billing_config.enabled:
+      user = auth.session_user(request)
+      if user:
+        uid = db.upsert_user(c, user["x_user_id"], user["username"], user.get("name"))
+        row = db.get_billing_account(c, user_id=uid)
+        if row:
+          billing_info = {
+            "remaining": db.remaining_budget(row),
+            "budget": row["budget_usd"],
+            "spent": row["spent_usd"],
+            "period_end": row["period_end"][:10],
+            "status": row["status"],
+            "cancelled": bool(row.get("cancelled_at")),
+          }
     return render(request, "settings.html", {
       "accounts": accounts,
       "account_count": len(accounts),
       "month_cost_usd": db.total_api_cost(c, since=db.month_start_utc()),
       "app_settings": db.get_app_settings(c),
+      "billing_info": billing_info,
+      "billing_notice": billing,
     })
 
   @app.post("/settings")
@@ -167,6 +290,10 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   @app.post("/accounts")
   def add_account(request: Request, handle: str = Form(...)):
     c = conn()
+    if billing_config.enabled and auth_config.enabled:
+      uid = db.owner_user_id(c)
+      if uid and not db.billing_access_ok(db.get_billing_account(c, user_id=uid)):
+        raise HTTPException(402, "API budget exhausted — top up in Settings")
     account_id = None
     try: account_id = db.add_account(c, handle)
     except Exception: pass  # duplicate handle: just return to the list
@@ -179,11 +306,18 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
                        include_retweets: bool = Form(False)):
     from app.fetch.client import XClient
     from app.fetch.estimate import estimate_fetch_cost
+    c = conn()
+    if billing_config.enabled and auth_config.enabled:
+      uid = db.owner_user_id(c)
+      if uid and not db.billing_access_ok(db.get_billing_account(c, user_id=uid)):
+        raise HTTPException(402, "API budget exhausted — top up in Settings")
     h = handle.lstrip("@").strip()
     if not h: raise HTTPException(400, "Handle required")
-    if db.get_account(conn(), handle=h): raise HTTPException(400, "Account already tracked")
+    if db.get_account(c, handle=h): raise HTTPException(400, "Account already tracked")
     try:
       result = estimate_fetch_cost(XClient(), h, include_replies=include_replies, include_retweets=include_retweets)
+    except db.BudgetExceededError as e:
+      raise HTTPException(402, str(e)) from e
     except Exception as e:
       raise HTTPException(502, f"X API estimate failed: {e}") from e
     return JSONResponse(result)
