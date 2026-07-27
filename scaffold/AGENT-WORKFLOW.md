@@ -10,7 +10,7 @@
 
 # Token Hygiene
 
-- NEVER EVER GREP THE ENTIRE CODEBASE IF READING scaffold/ARCH-LLM.md WOULD SUFFICE. YOU WASTE MY FUCKING TOKENS LIKE YOU DON'T KNOW THEY COST MONEY. I DON'T EVER WANT TO SEE THAT AGAIN UNLESS ABSOLUTELY NECESSARY.
+- NEVER EVER GREP THE ENTIRE CODEBASE IF READING scaffold/CODEMAP-LLM.md WOULD SUFFICE. YOU WASTE MY FUCKING TOKENS LIKE YOU DON'T KNOW THEY COST MONEY. I DON'T EVER WANT TO SEE THAT AGAIN UNLESS ABSOLUTELY NECESSARY.
 - Re-read scaffold/AGENT-COMMS.md, scaffold/AGENT-WORKFLOW.md, and the relevant scaffold/ files every so often as context grows.
 
 # Test Driven Development
@@ -24,10 +24,10 @@
 A change is done only when:
 1. It does what we agreed it should do.
 2. Automated tests cover that behavior (new tests for new behavior; changed tests when behavior changes).
-3. If facts changed for the product or system, scaffold/ARCH-LLM.md is updated (minimal deltas; no padding). Update scaffold/ARCH-HUMAN.md when the maintainer needs a readable summary. Remember, ARCH-HUMAN is not an instruction manual for the app. It is strictly for understanding the *codebase*.
+3. If facts changed for the product or system, scaffold/CODEMAP-LLM.md is updated (minimal deltas; no padding). Update scaffold/CODEMAP-HUMAN.md when the file map, flows, or state locations changed (see that file's "what belongs here" list).
 How to pick test type (project default):
 4. Unit: small pieces of logic with no real database or network.
 5. Integration: behavior that really depends on HTTP + DB, or webhooks / OAuth / Stripe — exercise real boundaries with test keys, stubs, or recorded fixtures as appropriate.
 6. Browser (e2e): only for stable end-to-end flows; avoid writing a dozen e2e tests while screens are still moving daily.
 
-scaffold version: 2.6.0
+scaffold version: 2.7.0
