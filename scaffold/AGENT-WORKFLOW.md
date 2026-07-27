@@ -30,4 +30,4 @@ How to pick test type (project default):
 5. Integration: behavior that really depends on HTTP + DB, or webhooks / OAuth / Stripe — exercise real boundaries with test keys, stubs, or recorded fixtures as appropriate.
 6. Browser (e2e): only for stable end-to-end flows; avoid writing a dozen e2e tests while screens are still moving daily.
 
-scaffold version: 2.5.1
+scaffold version: 2.6.0
