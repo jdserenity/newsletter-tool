@@ -1,75 +1,62 @@
-# Architecture (human-readable)
+# Codebase map (human-readable)
 
-What this app is, how the pieces fit, and how to run it. Confirmed facts only. Agent-dense detail lives in `scaffold/ARCH-LLM.md`. Lessons/traps live in `scaffold/PROJECT-KNOWLEDGE.md`.
+Maintainer’s map: which files do what, how data moves, where state lives. Prefer diagrams. Confirmed product/system facts → `scaffold/CODEMAP-LLM.md`. Lessons/traps → `scaffold/PROJECT-KNOWLEDGE.md`. Install/run → root `README.md`.
 
-## What it is
+## What belongs here
 
-**More Mentally Stable X Experience** — a personal web app that turns chosen X (Twitter) accounts into clean **newsletters** (once or twice a week). You browse them on a webpage (or via RSS), mark posts and whole editions as read, and stay logged off X without losing the signal.
+- File / module map (roles, not product rules)
+- Data and control flow (diagrams preferred)
+- Where durable state lives (paths, tables as locations)
 
-Not email. Not multi-user. Hosted on your VPS as a subdomain.
+Do **not** put here: product pitch, pricing, UI behavior details, API cost rules, credentials how-to, run/deploy commands, glossaries, or lessons — those have other homes (above).
+
+## Flow
 
 ```
-  X API (bearer)              Your browser (signed-in)
-        │                              │
-        ▼                              ▼
-   scheduled fetch ──────────► SQLite  ◄──── like / dislike / settings
-   (store tweets)                │
+  X API (bearer)              Browser (signed-in)         Stripe
+        │                            │                      │
+        ▼                            ▼                      ▼
+   scheduled fetch ──────────► SQLite  ◄──── UI actions   billing
+   (store tweets)                │         like/dislike    webhooks
         │                        ├── homepage carousel
-        ▼                        ├── /settings (cadence, append unread)
+        ▼                        ├── /settings
    build editions ───────────────┤
-                                 └── public RSS + edition links
+                                 └── public RSS + /editions/{id}
 ```
 
-## Main screens
+Manual path: `news-manual-fetch` → same fetch + edition build as the scheduler (`app/scheduler.py` → `app/fetch/runner.py`).
 
-| Screen | What you see |
+## Module map
+
+| Path | Role |
 | --- | --- |
-| **Landing** `/` (signed out) | Public artistic page: product name, pitch, pricing line, **Enter now** → Stripe $1 entry (prepaid API budget). “Already in?” → X sign-in for returning subscribers. Footer attribution with X profile links. |
-| **Home** `/` (signed in) | Horizontal carousel: one card per tracked account (toggles, API cost, latest edition’s posts). Extra “Add account” card with cost estimate. |
-| **Settings** `/settings` | Newsletter cadence (once/week or twice/week Mon+Thu; default twice), whether unread tweets carry into the next edition (default yes), list/remove accounts, month’s total API spend. Header button becomes **Home**. |
-| **Edition** `/editions/{id}` | Single period for RSS deep links (public). Like/dislike only if signed in. |
-| **RSS** `/feeds/{id}.xml` | Public feed per account (no login cookie). |
+| `app/main.py` | Routes, templates, lifespan (starts scheduler) |
+| `app/db.py` | SQLite schema, queries, DB path, cost helpers |
+| `app/newsletter.py` | Stored tweets + settings → edition items (no network) |
+| `app/rss.py` | RSS XML from editions only |
+| `app/billing.py` | Stripe Checkout, webhook, period-close refunds |
+| `app/auth.py` | X OAuth, session, auth middleware / public prefixes |
+| `app/user_actions.py` | Owner like/unlike on X (checkmark) |
+| `app/scheduler.py` | Cron Mon (+ Thu if twice-weekly) 06:00 UTC; `run_job()` |
+| `app/fetch/client.py` | X API v2 client (bearer) |
+| `app/fetch/runner.py` | Period bounds, fetch window, store tweets, build editions |
+| `app/fetch/estimate.py` | Pre-add cost estimate (no `api_calls` writes) |
+| `app/cli.py` | `news-dev`, `news-manual-fetch`, `news-db-status` |
+| `app/env.py` | Load `.env` |
+| `app/templates/` | `base`, `home`, `landing`, `settings`, `edition`, `login`, `_tweet_macros` |
+| `app/static/` | `carousel.js`, `home.js`, `landing.css`, `landing.js`, favicons |
+| `tests/` | pytest; web TestClient with `with_scheduler=False`; fetch faked |
 
-**Reading flow:** each tweet shows meta on the left (kind, date, stats, link). On the right, **X** then **✓** sit together — X dislikes (local bucket for later suggestions), ✓ likes on X when you click. Either marks the tweet read (dims and sinks to the bottom). Re-clicking undoes it. When every tweet is handled, the big newsletter checkmark moves to the **top** of the card so you can dismiss the whole week without scrolling. Empty weeks keep that checkmark at the bottom.
+## Where state lives
 
-**Carousel:** scroll sideways between accounts; scroll inside a card for long weeks. Toolbar toggles and like/dislike save in place (no full page reload). On a phone, each card is nearly full-screen width with snap-between-cards scrolling; the tall desktop toolbar stacks so toggles stay tappable.
-
-**Home screen icon:** same cream serif **Y** as the browser tab favicon (iOS “Add to Home Screen” uses the Apple touch icon / web app manifest, not the small tab icon alone).
-
-## How the system is built
-
-One Python **FastAPI** app does everything: pages, RSS, scheduled fetch.
-
-| Piece | Job |
+| What | Where |
 | --- | --- |
-| `app/fetch/` | Talk to X (read posts, cost estimate). Respect per-account filters. Record cost rows. |
-| `app/db.py` | SQLite: accounts, tweets, editions, costs, OAuth, likes/dislikes, read state, global app settings. |
-| `app/newsletter.py` | Turn stored tweets into newsletter items (no network). |
-| `app/main.py` + templates | Web UI. |
-| `app/rss.py` | Feeds from stored editions only. |
-| `app/scheduler.py` | Mon (+ Thu when twice-weekly) 06:00 UTC fetch (also `news-manual-fetch`). |
-| `app/user_actions.py` | Owner like/unlike on X (checkmark click). |
-| `app/auth.py` | Sign in with X (OAuth). RSS and edition links stay public. |
-
-**Database file:** path from `DATABASE_PATH`, default `~/.local/share/newsletter-tool/newsletter.db` (outside the git folder so worktrees share data).
-
-**Settings that matter for cost:** replies and retweets can be skipped at the API (never downloaded, never billed). Quote tweets are always fetched; turning quotes off only hides them when building the newsletter.
-
-## Credentials (two kinds)
-
-1. **App token** (`X_BEARER_TOKEN`) — weekly fetch and estimates; not “you” as a user.
-2. **Your X login** (OAuth client id/secret, callback URL, session secret) — web sign-in; checkmark uses it to like tweets on X when you click.
-
-## Run it
-
-```bash
-./scripts/setup.sh
-cp .env.example .env    # fill X + OAuth values
-source venv/bin/activate
-news-dev                # local web server
-pytest                  # tests
-news-manual-fetch       # pull current period + build newsletters
-news-db-status          # what’s in the database
-```
-
-**VPS:** one uvicorn process, env vars set (including a stable `DATABASE_PATH`), production OAuth callback registered in the X Developer Console, reverse proxy from your subdomain to the app port.
+| DB file | `DATABASE_PATH`, else `~/.local/share/newsletter-tool/newsletter.db` (outside git; shared across worktrees) |
+| Accounts, tweets, editions | `accounts`, `tweets`, `editions` |
+| API spend rows | `api_calls` |
+| Global cadence / append-unread | `app_settings` (singleton id=1) |
+| Owner OAuth tokens | `oauth_session` (singleton id=1) |
+| Users + billing | `users`, `billing_accounts`, `billing_payments`, `billing_refunds` |
+| Like / dislike / read | `liked_tweets`, `disliked_tweets`, `read_tweets`, `read_newsletters` |
+| Cached API payloads | `tweets.raw_json` (rebuild editions without refetch) |
+| Session cookie | signed by `SESSION_SECRET` (browser; may sync into `oauth_session` on signed-in `GET /`) |
