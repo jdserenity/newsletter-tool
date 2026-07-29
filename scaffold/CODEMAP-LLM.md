@@ -6,8 +6,8 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - **Name (UI):** More Mentally Stable X Experience
 - Personal single-user tool: selected X accounts → clean newsletters (web + RSS). Email out of scope. No multi-tenant.
 - Hosted on owner VPS as subdomain of personal domain.
-- **Landing (`/` signed-out):** artistic public page. **Enter now** → `/billing/checkout` ($1 Stripe hosted Checkout). **Already in?** → `/auth/login/start?returning=1`. After paid entry → X OAuth. Logout → `/`.
-- **Pricing (stated on landing):** “API Costs + 1USD service fee. Extremely reasonable.” **Entry Checkout:** $1 hosted Stripe Checkout = $1 prepaid API budget (anniversary billing month). **Top-up:** user-chosen API budget + $1 service fee when exhausted or after period close. OAuth only after entry payment (or returning user with active budget). Unused API budget refunded at period end via Stripe partial refund. Cancel keeps access until `period_end`.
+- **Landing (`/` signed-out):** artistic public page. **Enter now** → `/auth/login/start` (X OAuth). After OAuth: active billing → app; never paid → `/billing/checkout` ($1); exhausted/expired → `/settings?billing=required`. Logout → `/`.
+- **Pricing (stated on landing):** “API Costs + 1USD service fee. Extremely reasonable.” **Entry Checkout:** $1 hosted Stripe Checkout = $1 prepaid API budget (anniversary billing month). **Top-up:** user-chosen API budget + $1 service fee when exhausted or after period close. OAuth first; billing enforced after identity is known. Unused API budget refunded at period end via Stripe partial refund. Cancel keeps access until `period_end`.
 - **Attribution (landing footer):** “Created by J.D. Diamari for Good Power Infinity, So That Evil May Be a Solved Problem” — J.D. Diamari → `https://x.com/diamaribuilds`; full company phrase (including motto) → `https://x.com/gdpwrinfty`.
 - Add/remove tracked X accounts. One **edition** per account per fetch period (`editions` table; `week_start`/`week_end` columns are the period bounds).
 - **Cadence** (global `app_settings`): `twice_weekly` (default) or `weekly`. Twice: editions on Mon and Thu (UTC). Periods are Thu→Mon and Mon→Thu. Weekly: Mon→Mon only (job Mon only).
@@ -74,13 +74,13 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 | GET | `/editions/{id}` | Public deep link; like/dislike UI only if signed in |
 | GET | `/feeds/{id}.xml` | Public RSS; CDATA HTML bodies; RFC 822 pubDate; Cache-Control 300 |
 | GET | `/billing/checkout` | Entry $1 → Stripe hosted Checkout |
-| GET | `/billing/success` | Verify paid session → OAuth start |
+| GET | `/billing/success` | Verify paid session → link to signed-in user → `/`; if signed out → OAuth start (session holds checkout id) |
 | GET | `/billing/cancel` | → `/` |
 | POST | `/billing/webhook` | Stripe `checkout.session.completed` (idempotent) |
 | POST | `/billing/topup` | Auth; form `budget_usd` → budget+$1 Checkout |
 | GET | `/billing/topup/success` | Apply top-up payment |
 | POST | `/billing/cancel-subscription` | Auth; cancel at period end |
-| GET/POST | `/auth/login`, `/auth/login/start`, `/auth/callback`, `/auth/logout` | OAuth PKCE; `login/start` gated on entry pay unless `?returning=1`; logout → `/` |
+| GET/POST | `/auth/login`, `/auth/login/start`, `/auth/callback`, `/auth/logout` | OAuth PKCE; always starts OAuth; callback stores session then gates on billing; logout → `/` |
 
 ## UI behavior
 - **Out-links** (X profile/tweet/media, RSS): `target="_blank" rel="noopener noreferrer"`. In-app nav same tab.

@@ -13,12 +13,12 @@ Do **not** put here: product pitch, pricing, UI behavior details, API cost rules
 ## Flow
 
 ```
-  X API (bearer)              Browser (signed-in)         Stripe
-        │                            │                      │
-        ▼                            ▼                      ▼
-   scheduled fetch ──────────► SQLite  ◄──── UI actions   billing
-   (store tweets)                │         like/dislike    webhooks
-        │                        ├── homepage carousel
+  X API (bearer)              Browser                         Stripe
+        │                        │                              │
+        ▼                        ▼                              ▼
+   scheduled fetch ──────────► SQLite  ◄──── UI actions       billing
+   (store tweets)                │         like/dislike        webhooks
+        │                        ├── landing → X OAuth → (pay if needed) → homepage carousel
         ▼                        ├── /settings
    build editions ───────────────┤
                                  └── public RSS + /editions/{id}
