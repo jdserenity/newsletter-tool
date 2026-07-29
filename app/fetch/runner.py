@@ -46,7 +46,9 @@ def fetch_account_week(conn, client, account, week_start, week_end, now=None, lo
   """Fetch one account's tweets for the period. Returns cost incurred (USD)."""
   now = now or datetime.now(timezone.utc)
   cost = 0.0
-  user_id = db.owner_user_id(conn)
+  # No STRIPE_SECRET_KEY → personal/dev mode: skip prepaid budget gate (X Dev Console bills directly).
+  from app.billing import BillingConfig
+  user_id = db.owner_user_id(conn) if BillingConfig.from_env().configured() else None
   if user_id and not db.billing_access_ok(db.get_billing_account(conn, user_id=user_id)):
     if log: log(f"  @{account['handle']}: skipped — API budget exhausted")
     return 0.0
