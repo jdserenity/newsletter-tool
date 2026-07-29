@@ -82,11 +82,8 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       return render(request, "login.html", {})
 
     @app.get("/auth/login/start")
-    def auth_login_start(request: Request, returning: int = 0):
-      if billing_config.enabled:
-        if not (request.session.get(auth.SESSION_BILLING_ENTRY_VERIFIED) or returning):
-          return RedirectResponse("/billing/checkout", status_code=303)
-        if returning: request.session[auth.SESSION_RETURNING_LOGIN] = True
+    def auth_login_start(request: Request):
+      # OAuth first; billing is enforced after identity is known (callback / home).
       state = secrets.token_urlsafe(32)
       verifier, challenge = auth.make_pkce_pair()
       request.session[auth.SESSION_OAUTH_STATE] = state
@@ -111,26 +108,24 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
         raise HTTPException(400, f"OAuth token exchange failed: {e}") from e
       c = conn()
       user_id = db.upsert_user(c, me["id"], me["username"], me.get("name", ""))
-      billing_row = db.get_billing_account(c, user_id=user_id)
-      checkout_sid = request.session.get(auth.SESSION_BILLING_CHECKOUT_SESSION)
-      if billing_config.enabled and checkout_sid and request.session.get(auth.SESSION_BILLING_ENTRY_VERIFIED):
+      checkout_sid = request.session.pop(auth.SESSION_BILLING_CHECKOUT_SESSION, None)
+      if billing_config.enabled and checkout_sid:
         try:
           sess = billing.retrieve_checkout_session(billing_config, checkout_sid)
           billing.link_entry_payment_to_user(c, checkout_sid, user_id, stripe_customer_id=sess.get("customer"))
         except Exception as e:
           raise HTTPException(400, f"Billing link failed: {e}") from e
-        request.session.pop(auth.SESSION_BILLING_ENTRY_VERIFIED, None)
-        request.session.pop(auth.SESSION_BILLING_CHECKOUT_SESSION, None)
-      elif billing_config.enabled and not db.billing_access_ok(billing_row):
-        if request.session.pop(auth.SESSION_RETURNING_LOGIN, None):
-          return RedirectResponse("/settings?billing=required", status_code=303)
-        return RedirectResponse("/billing/checkout", status_code=303)
       auth.store_user_session(request, token, me)
       db.save_oauth_session(c, me["id"], token["access_token"], token.get("refresh_token"),
         expires_at=auth.expires_at_from_token(token))
       request.session.pop(auth.SESSION_OAUTH_STATE, None)
       request.session.pop(auth.SESSION_CODE_VERIFIER, None)
-      request.session.pop(auth.SESSION_RETURNING_LOGIN, None)
+      if billing_config.enabled:
+        billing_row = db.get_billing_account(c, user_id=user_id)
+        if not db.billing_access_ok(billing_row):
+          if billing_row:
+            return RedirectResponse("/settings?billing=required", status_code=303)
+          return RedirectResponse("/billing/checkout", status_code=303)
       return RedirectResponse("/", status_code=303)
 
     @app.post("/auth/logout")
@@ -156,7 +151,16 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
         raise HTTPException(400, f"Invalid checkout session: {e}") from e
       if not billing.session_is_paid(sess):
         return RedirectResponse("/billing/cancel", status_code=303)
-      request.session[auth.SESSION_BILLING_ENTRY_VERIFIED] = True
+      user = auth.session_user(request)
+      if user:
+        c = conn()
+        user_id = db.upsert_user(c, user["x_user_id"], user["username"], user.get("name"))
+        try:
+          billing.link_entry_payment_to_user(c, session_id, user_id, stripe_customer_id=sess.get("customer"))
+        except Exception as e:
+          raise HTTPException(400, f"Billing link failed: {e}") from e
+        return RedirectResponse("/", status_code=303)
+      # Paid while signed out (rare) — finish X OAuth, then link via session checkout id.
       request.session[auth.SESSION_BILLING_CHECKOUT_SESSION] = session_id
       return RedirectResponse("/auth/login/start", status_code=303)
 
@@ -246,8 +250,17 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
   def home(request: Request):
     # Signed-out visitors (auth on) see the landing page; signed-in users get the app.
     if auth_config.enabled and not auth.session_user(request):
-      return render(request, "landing.html", {"billing_enabled": billing_config.enabled})
+      return render(request, "landing.html", {})
     c = conn()
+    if auth_config.enabled and billing_config.enabled:
+      user = auth.session_user(request)
+      if user:
+        uid = db.upsert_user(c, user["x_user_id"], user["username"], user.get("name"))
+        billing_row = db.get_billing_account(c, user_id=uid)
+        if not db.billing_access_ok(billing_row):
+          if billing_row:
+            return RedirectResponse("/settings?billing=required", status_code=303)
+          return RedirectResponse("/billing/checkout", status_code=303)
     repair_missing_editions(c)  # local only — no X API
     after_authenticated_request(c, request)
     return render(request, "home.html", {"cards": newsletter_cards(c)})

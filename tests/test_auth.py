@@ -45,7 +45,9 @@ def auth_client(tmp_path, monkeypatch):
   monkeypatch.setenv("X_CLIENT_SECRET", "test-client-secret")
   monkeypatch.setenv("X_OAUTH_CALLBACK_URL", "http://testserver/auth/callback")
   monkeypatch.setenv("SESSION_SECRET", "test-session-secret")
-  app = create_app(db_path=str(tmp_path / "auth.db"), with_scheduler=False, auth_enabled=True)
+  # billing_enabled=False: auth tests must not depend on STRIPE_* in the developer .env.
+  app = create_app(db_path=str(tmp_path / "auth.db"), with_scheduler=False,
+    auth_enabled=True, billing_enabled=False)
   with TestClient(app) as c:
     yield c
 
@@ -55,12 +57,14 @@ def test_unauthenticated_home_shows_landing(auth_client):
   assert "More Mentally Stable X Experience" in r.text
   assert "landing" in r.text
   assert 'href="https://x.com/diamaribuilds"' in r.text
-  assert 'href="https://x.com/gdpwrultd"' in r.text
+  assert 'href="https://x.com/gdpwrinfty"' in r.text
   assert "Created by" in r.text
   assert "J.D. Diamari" in r.text
-  assert "Good Power Unlimited, So That Evil May Be a Solved Problem" in r.text
+  assert "Good Power Infinity, So That Evil May Be a Solved Problem" in r.text
   assert "Enter now" in r.text
-  assert "/billing/checkout" in r.text or "/auth/login/start" in r.text
+  assert 'href="/auth/login/start"' in r.text
+  assert "Already in?" not in r.text
+  assert "returning=1" not in r.text
   # Pricing: API costs + 1USD service fee.
   assert "API Costs + 1USD service fee" in r.text
   assert "Extremely reasonable" in r.text

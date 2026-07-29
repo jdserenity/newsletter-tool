@@ -1,4 +1,6 @@
 import pytest
+from urllib.parse import parse_qs, urlparse
+
 from fastapi.testclient import TestClient
 
 from app import auth, db
@@ -35,42 +37,63 @@ def billing_client(tmp_path, monkeypatch):
   with TestClient(app) as c:
     yield c
 
+def _oauth_login(client, monkeypatch, x_user_id="99", username="owner"):
+  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {
+    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
+  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {
+    "id": x_user_id, "username": username, "name": "Owner"})
+  login = client.get("/auth/login/start", follow_redirects=False)
+  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+  return client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
+
 def test_entry_checkout_redirects_to_stripe(billing_client):
   r = billing_client.get("/billing/checkout", follow_redirects=False)
   assert r.status_code == 303
   assert r.headers["location"] == "https://checkout.stripe.test/entry"
 
-def test_billing_success_unlocks_oauth(billing_client):
-  r = billing_client.get("/billing/success?session_id=cs_test_entry", follow_redirects=False)
-  assert r.status_code == 303
-  assert r.headers["location"] == "/auth/login/start"
+def test_oauth_start_always_goes_to_x(billing_client):
   r = billing_client.get("/auth/login/start", follow_redirects=False)
   assert r.status_code == 303
   assert "x.com/i/oauth2/authorize" in r.headers["location"]
 
-def test_oauth_start_blocked_without_payment(billing_client):
-  r = billing_client.get("/auth/login/start", follow_redirects=False)
+def test_oauth_callback_unpaid_goes_to_checkout(billing_client, monkeypatch):
+  r = _oauth_login(billing_client, monkeypatch)
   assert r.status_code == 303
   assert r.headers["location"] == "/billing/checkout"
+  # Session is stored so checkout success can link payment without re-OAuth.
+  assert billing_client.cookies.get("session") is not None
 
-def test_returning_login_skips_entry_payment(billing_client):
-  r = billing_client.get("/auth/login/start?returning=1", follow_redirects=False)
+def test_billing_success_links_payment_when_signed_in(billing_client, monkeypatch):
+  r = _oauth_login(billing_client, monkeypatch)
+  assert r.headers["location"] == "/billing/checkout"
+  r = billing_client.get("/billing/success?session_id=cs_test_entry", follow_redirects=False)
   assert r.status_code == 303
-  assert "x.com/i/oauth2/authorize" in r.headers["location"]
-
-def test_oauth_callback_links_entry_payment(billing_client, monkeypatch):
-  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {
-    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
-  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {"id": "99", "username": "owner", "name": "Owner"})
-  billing_client.get("/billing/success?session_id=cs_test_entry", follow_redirects=False)
-  login = billing_client.get("/auth/login/start", follow_redirects=False)
-  state = login.headers["location"].split("state=")[1].split("&")[0]
-  # state from URL - need proper parse
-  from urllib.parse import parse_qs, urlparse
-  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
-  r = billing_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
-  assert r.status_code == 303
+  assert r.headers["location"] == "/"
   c = db.connect(billing_client.app.state.db_path)
   row = db.get_billing_account(c, x_user_id="99")
   assert row is not None
   assert row["budget_usd"] == pytest.approx(1.0)
+
+def test_billing_success_unsigned_sends_to_oauth(billing_client):
+  r = billing_client.get("/billing/success?session_id=cs_test_entry", follow_redirects=False)
+  assert r.status_code == 303
+  assert r.headers["location"] == "/auth/login/start"
+
+def test_oauth_callback_links_pending_entry_payment(billing_client, monkeypatch):
+  # Pay while signed out, then OAuth — callback attaches the pending Checkout session.
+  billing_client.get("/billing/success?session_id=cs_test_entry", follow_redirects=False)
+  r = _oauth_login(billing_client, monkeypatch)
+  assert r.status_code == 303
+  assert r.headers["location"] == "/"
+  c = db.connect(billing_client.app.state.db_path)
+  row = db.get_billing_account(c, x_user_id="99")
+  assert row is not None
+  assert row["budget_usd"] == pytest.approx(1.0)
+
+def test_landing_enter_goes_to_oauth_not_checkout(billing_client):
+  r = billing_client.get("/", follow_redirects=False)
+  assert r.status_code == 200
+  assert 'href="/auth/login/start"' in r.text
+  assert "/billing/checkout" not in r.text
+  assert "Already in?" not in r.text
+  assert "returning=1" not in r.text

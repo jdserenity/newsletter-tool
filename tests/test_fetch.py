@@ -360,3 +360,33 @@ def test_x_api_error_hint_blank_503():
   r = httpx.Response(503, json={"detail": "Service Unavailable", "status": 503, "type": "about:blank"})
   assert "Pay-Per-Use" in x_api_error_hint(r)
   assert x_api_error_hint(httpx.Response(401)) == ""
+
+def _signed_in_owner_without_billing(conn, x_user_id="99", username="owner"):
+  """Owner exists in oauth_session + users, but has no Stripe billing row."""
+  db.upsert_user(conn, x_user_id, username, "Owner")
+  db.save_oauth_session(conn, x_user_id, "access", refresh_token="refresh")
+
+def test_fetch_skips_budget_guard_without_stripe_secret(conn, monkeypatch):
+  """Personal/dev mode: no STRIPE_SECRET_KEY → fetch runs even with no prepaid budget."""
+  monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
+  _signed_in_owner_without_billing(conn)
+  aid = db.add_account(conn, "alice")
+  client = XClient(bearer_token="t", http=FakeHttp(TWEETS, QUOTED_INCLUDES))
+  account = db.get_account(conn, account_id=aid)
+  cost = fetch_account_week(conn, client, account, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z")
+  assert cost > 0
+  assert len(db.tweets_for_week(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z")) == 2
+
+def test_fetch_skips_when_stripe_configured_and_no_budget(conn, monkeypatch):
+  """With Stripe wired, unpaid/exhausted owners must not burn X API credits."""
+  monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_fake")
+  _signed_in_owner_without_billing(conn)
+  aid = db.add_account(conn, "alice")
+  client = XClient(bearer_token="t", http=FakeHttp(TWEETS, QUOTED_INCLUDES))
+  account = db.get_account(conn, account_id=aid)
+  logs = []
+  cost = fetch_account_week(conn, client, account, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z",
+    log=logs.append)
+  assert cost == 0.0
+  assert any("API budget exhausted" in m for m in logs)
+  assert db.tweets_for_week(conn, aid, "2026-06-29T00:00:00Z", "2026-07-06T00:00:00Z") == []

@@ -26,9 +26,7 @@ SESSION_USERNAME = "username"
 SESSION_NAME = "name"
 SESSION_OAUTH_STATE = "oauth_state"
 SESSION_CODE_VERIFIER = "code_verifier"
-SESSION_BILLING_ENTRY_VERIFIED = "billing_entry_verified"
 SESSION_BILLING_CHECKOUT_SESSION = "billing_checkout_session_id"
-SESSION_RETURNING_LOGIN = "billing_returning_login"
 
 class AuthConfig:
   def __init__(self, enabled, client_id, client_secret, callback_url, session_secret, scopes=None, http=None):
