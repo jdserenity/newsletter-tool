@@ -9,17 +9,18 @@
     "you will not believe",
     "ratio'd into oblivion",
     "hot take incoming",
-    "thread (1/47)",
+    "thread (1/47) 🧵👇",
     "this changes everything",
+    "we're so back",
     "unpopular opinion but",
     "the discourse is exhausted",
     "quote-tweet pile-on",
-    "algorithmic weather",
-    "doomscroll weather report",
+    "doomscroll",
     "notification hunger",
     "timeline wants blood",
     "another dunk, another day",
     "signal lost in the noise",
+    "the reason I hate this person is...",
   ];
 
   var max = 7;
