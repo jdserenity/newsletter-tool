@@ -60,7 +60,9 @@ def test_unauthenticated_home_shows_landing(auth_client):
   assert "J.D. Diamari" in r.text
   assert "Good Power Infinity, So That Evil May Be a Solved Problem" in r.text
   assert "Enter now" in r.text
-  assert "/billing/checkout" in r.text or "/auth/login/start" in r.text
+  assert 'href="/auth/login/start"' in r.text
+  assert "Already in?" not in r.text
+  assert "returning=1" not in r.text
   # Pricing: API costs + 1USD service fee.
   assert "API Costs + 1USD service fee" in r.text
   assert "Extremely reasonable" in r.text
