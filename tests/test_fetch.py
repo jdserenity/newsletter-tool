@@ -6,7 +6,8 @@ from app.fetch.client import (
   XClient, classify_tweet, COST_PER_POST_READ, COST_PER_USER_READ,
   attach_media, attach_quoted, count_post_reads)
 from app.fetch.runner import (
-  fetch_account_week, period_bounds, repair_missing_editions, run_weekly_fetch, week_bounds)
+  fetch_account_week, fetch_new_account, period_bounds, repair_missing_editions,
+  run_weekly_fetch, week_bounds)
 
 class FakeResponse:
   def __init__(self, body, status_code=200):
@@ -365,6 +366,19 @@ def _signed_in_owner_without_billing(conn, x_user_id="99", username="owner"):
   """Owner exists in oauth_session + users, but has no Stripe billing row."""
   db.upsert_user(conn, x_user_id, username, "Owner")
   db.save_oauth_session(conn, x_user_id, "access", refresh_token="refresh")
+
+def test_fetch_new_account_builds_edition_for_current_period(conn):
+  """Adding an account (personal mode) should immediately get the last complete period."""
+  db.update_app_settings(conn, cadence="weekly")
+  aid = db.add_account(conn, "alice")
+  client = XClient(bearer_token="t", http=FakeHttp(TWEETS, QUOTED_INCLUDES))
+  now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
+  result = fetch_new_account(conn, aid, client=client, now=now)
+  assert result[0] == "alice"
+  assert result[2] == 2  # item count
+  ws, _ = week_bounds(now)
+  assert db.edition_for_week(conn, aid, ws) is not None
+  assert db.edition_for_week(conn, aid, ws)["item_count"] == 2
 
 def test_fetch_skips_budget_guard_without_stripe_secret(conn, monkeypatch):
   """Personal/dev mode: no STRIPE_SECRET_KEY → fetch runs even with no prepaid budget."""
