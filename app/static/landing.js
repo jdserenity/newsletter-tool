@@ -23,7 +23,7 @@
     "the reason I hate this person is...",
   ];
 
-  var max = 7;
+  var max = 10;
   var active = 0;
 
   function spawn() {
