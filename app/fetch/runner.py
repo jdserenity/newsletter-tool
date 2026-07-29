@@ -121,6 +121,25 @@ def repair_missing_editions(conn, now=None):
     repaired.append(account["handle"])
   return repaired
 
+def fetch_new_account(conn, account_id, client=None, now=None, log=None):
+  """Fetch + build the last complete period for one newly added account.
+
+  Used in personal/dev mode (Stripe off) so the homepage has a newsletter right away.
+  Returns (handle, cost, item_count).
+  """
+  client = client or XClient(log=log)
+  settings = db.get_app_settings(conn)
+  week_start, week_end = period_bounds(now, settings["cadence"])
+  account = db.get_account(conn, account_id=account_id)
+  if not account or not account["active"]:
+    raise ValueError(f"account {account_id} not found or inactive")
+  if log: log(f"Fetching new @{account['handle']} ({week_start[:10]} → {week_end[:10]})...")
+  cost = fetch_account_week(conn, client, account, week_start, week_end, now=now, log=log)
+  items = build_account_edition(conn, account, week_start, week_end, cost,
+    append_unread=bool(settings["append_unread"]))
+  if log: log(f"  @{account['handle']}: {len(items)} items, API ${cost:.3f}")
+  return account["handle"], cost, len(items)
+
 def run_weekly_fetch(conn, client=None, now=None, db_path=None, log=None):
   """Fetch + build newsletters for all active accounts. Returns list of (handle, cost).
 

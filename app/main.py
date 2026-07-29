@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import auth, billing, db
-from app.fetch.runner import repair_missing_editions
+from app.fetch.runner import fetch_new_account, repair_missing_editions
 from app.scheduler import start_scheduler
 from app.user_actions import LikeActionError, like_tweet_on_x, unlike_tweet_on_x
 
@@ -312,6 +312,10 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     except Exception: pass  # duplicate handle: just return to the list
     if account_id and auth_config.enabled:
       after_authenticated_request(c, request)
+    # Personal/dev (no Stripe): pull the last complete period so the card isn't empty.
+    if account_id and not billing_config.configured():
+      try: fetch_new_account(c, account_id)
+      except Exception: pass  # account is saved; scheduled/manual fetch can retry
     return RedirectResponse("/", status_code=303)
 
   @app.post("/accounts/estimate")

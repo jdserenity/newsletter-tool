@@ -5,8 +5,11 @@ from app import db
 from app.main import create_app
 
 @pytest.fixture
-def client(tmp_path):
-  app = create_app(db_path=str(tmp_path / "test.db"), with_scheduler=False, auth_enabled=False)
+def client(tmp_path, monkeypatch):
+  # Stub immediate on-add fetch so web tests stay offline (no real X API).
+  monkeypatch.setattr("app.main.fetch_new_account", lambda *a, **k: None)
+  app = create_app(db_path=str(tmp_path / "test.db"), with_scheduler=False, auth_enabled=False,
+    billing_enabled=False)
   with TestClient(app) as c:
     c.db_path = str(tmp_path / "test.db")
     yield c
@@ -44,7 +47,53 @@ def test_add_account(client):
   r = client.post("/accounts", data={"handle": "@alice"}, follow_redirects=True)
   assert r.status_code == 200
   assert 'href="https://x.com/alice"' in r.text
-  assert "hello" not in r.text  # no edition yet
+  assert "hello" not in r.text  # fetch stubbed in client fixture — no edition yet
+
+def test_add_account_fetches_when_stripe_off(tmp_path, monkeypatch):
+  """Personal/dev mode (no Stripe): new account immediately gets the last period's newsletter."""
+  from datetime import datetime, timezone
+  from app.fetch.client import XClient
+  from app.fetch.runner import period_bounds
+  from tests.test_fetch import FakeHttp, TWEETS
+
+  monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
+  fixed_now = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
+  ws, we = period_bounds(fixed_now, "weekly")
+  http = FakeHttp(TWEETS)
+  monkeypatch.setattr("app.fetch.runner.XClient",
+    lambda **kw: XClient(bearer_token="t", http=http))
+  monkeypatch.setattr("app.fetch.runner.period_bounds",
+    lambda now=None, cadence="twice_weekly": period_bounds(fixed_now, cadence))
+
+  db_path = str(tmp_path / "add-fetch.db")
+  c = db.connect(db_path)
+  db.update_app_settings(c, cadence="weekly")
+  c.close()
+
+  app = create_app(db_path=db_path, with_scheduler=False, auth_enabled=False, billing_enabled=False)
+  with TestClient(app) as client:
+    r = client.post("/accounts", data={"handle": "@newvoice"}, follow_redirects=True)
+    assert r.status_code == 200
+    assert "plain post" in r.text
+    c = db.connect(db_path)
+    aid = db.get_account(c, handle="newvoice")["id"]
+    ed = db.edition_for_week(c, aid, ws)
+    assert ed is not None
+    assert ed["item_count"] == 2
+
+def test_add_account_skips_fetch_when_stripe_on(tmp_path, monkeypatch):
+  """With Stripe configured, adding an account must not burn X credits immediately."""
+  called = []
+  monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_fake")
+  monkeypatch.setattr("app.main.fetch_new_account", lambda *a, **k: called.append(True))
+  app = create_app(db_path=str(tmp_path / "stripe-add.db"), with_scheduler=False,
+    auth_enabled=False, billing_enabled=True)
+  with TestClient(app) as client:
+    r = client.post("/accounts", data={"handle": "@alice"}, follow_redirects=True)
+    assert r.status_code == 200
+    assert called == []
+    c = db.connect(str(tmp_path / "stripe-add.db"))
+    assert db.list_editions(c) == []
 
 def test_remove_account_via_api(client):
   client.post("/accounts", data={"handle": "@alice"})

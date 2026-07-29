@@ -39,7 +39,7 @@ Manual path: `news-manual-fetch` → same fetch + edition build as the scheduler
 | `app/user_actions.py` | Owner like/unlike on X (checkmark) |
 | `app/scheduler.py` | Cron Mon (+ Thu if twice-weekly) 06:00 UTC; `run_job()` |
 | `app/fetch/client.py` | X API v2 client (bearer) |
-| `app/fetch/runner.py` | Period bounds, fetch window, store tweets, build editions |
+| `app/fetch/runner.py` | Period bounds, fetch window, store tweets, build editions; `fetch_new_account` on add when Stripe off |
 | `app/fetch/estimate.py` | Pre-add cost estimate (no `api_calls` writes) |
 | `app/cli.py` | `news-dev`, `news-manual-fetch`, `news-db-status` |
 | `app/env.py` | Load `.env` |

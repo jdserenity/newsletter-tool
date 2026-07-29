@@ -62,7 +62,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 | GET | `/` | Signed-out → `landing.html`; signed-in → carousel (`home.html`); repair missing editions (local); may persist OAuth session tokens |
 | GET | `/settings` | Account list + remove; month cost; global cadence + append-unread |
 | POST | `/settings` | Save global `cadence` (`weekly`\|`twice_weekly`) + `append_unread` |
-| POST | `/accounts` | Add handle |
+| POST | `/accounts` | Add handle; if Stripe off, immediate last-period fetch + edition |
 | POST | `/accounts/estimate` | JSON cost estimate |
 | POST | `/accounts/{id}/remove` | → redirect `/settings` |
 | GET | `/accounts/{id}` | → `/` |
@@ -100,6 +100,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 - **Owner actions:** checkmark click → like on X (`liked_tweets`); X button → local dislike (`disliked_tweets`). Tokens in `oauth_session` with `expires_at` (refresh when needed for likes).
 - Period window: `period_bounds(now, cadence)` — weekly: most recent complete Mon–Mon UTC; twice_weekly: most recent complete Mon–Thu or Thu–Mon UTC (`app/fetch/runner.py`). Manual fetch (`news-manual-fetch` / `run_job`) uses the same bounds from stored cadence.
 - **Fetch budget gate:** only when `BillingConfig.from_env().configured()` (needs `STRIPE_SECRET_KEY`). No Stripe key = personal/dev mode: fetch runs without prepaid budget / Stripe Checkout; X Dev Console can bill the owner directly. With Stripe configured, exhausted/missing budget skips the account fetch (no X calls).
+- **On-add fetch (Stripe off only):** `POST /accounts` calls `fetch_new_account` for the new row — same last-complete period as `news-manual-fetch` — then builds that edition. Failures are swallowed so add still succeeds. With Stripe configured, add does not fetch (wait for schedule / manual).
 - **X fetch retries:** bearer GETs retry on 408/425/429/500/502/503/504 and transport errors (5 retries, exponential backoff 2s…32s; 429 honors `Retry-After`). If one account still fails, others still build editions; run raises only when every account fails.
 
 ## Run / deploy
