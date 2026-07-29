@@ -45,7 +45,9 @@ def auth_client(tmp_path, monkeypatch):
   monkeypatch.setenv("X_CLIENT_SECRET", "test-client-secret")
   monkeypatch.setenv("X_OAUTH_CALLBACK_URL", "http://testserver/auth/callback")
   monkeypatch.setenv("SESSION_SECRET", "test-session-secret")
-  app = create_app(db_path=str(tmp_path / "auth.db"), with_scheduler=False, auth_enabled=True)
+  # billing_enabled=False: auth tests must not depend on STRIPE_* in the developer .env.
+  app = create_app(db_path=str(tmp_path / "auth.db"), with_scheduler=False,
+    auth_enabled=True, billing_enabled=False)
   with TestClient(app) as c:
     yield c
 
