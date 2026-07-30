@@ -63,6 +63,12 @@ CREATE TABLE IF NOT EXISTS oauth_session (
   expires_at TEXT,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS oauth_pending (
+  state TEXT PRIMARY KEY,
+  code_verifier TEXT NOT NULL,
+  checkout_session_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS liked_tweets (
   tweet_id TEXT NOT NULL PRIMARY KEY,
   liked_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -381,6 +387,36 @@ def save_oauth_session(conn, x_user_id, access_token, refresh_token=None, expire
 def get_oauth_session(conn):
   row = conn.execute("SELECT * FROM oauth_session WHERE id = 1").fetchone()
   return dict(row) if row else None
+
+# --- oauth pending (PKCE handshake; survives phone cookie loss) ---
+
+OAUTH_PENDING_TTL_SECONDS = 600
+
+def save_oauth_pending(conn, state, code_verifier, checkout_session_id=None):
+  conn.execute(
+    """INSERT INTO oauth_pending (state, code_verifier, checkout_session_id, created_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(state) DO UPDATE SET
+         code_verifier = excluded.code_verifier,
+         checkout_session_id = excluded.checkout_session_id,
+         created_at = excluded.created_at""",
+    (state, code_verifier, checkout_session_id))
+  conn.commit()
+  purge_expired_oauth_pending(conn)
+
+def take_oauth_pending(conn, state, max_age_seconds=OAUTH_PENDING_TTL_SECONDS, now=None):
+  """Consume a pending OAuth row by state. Returns dict or None if missing/expired."""
+  if not state: return None
+  purge_expired_oauth_pending(conn, max_age_seconds=max_age_seconds, now=now)
+  row = conn.execute("SELECT * FROM oauth_pending WHERE state = ?", (state,)).fetchone()
+  if not row: return None
+  conn.execute("DELETE FROM oauth_pending WHERE state = ?", (state,)); conn.commit()
+  return dict(row)
+
+def purge_expired_oauth_pending(conn, max_age_seconds=OAUTH_PENDING_TTL_SECONDS, now=None):
+  now = now or datetime.now(timezone.utc)
+  cutoff = (now - timedelta(seconds=max_age_seconds)).strftime("%Y-%m-%d %H:%M:%S")
+  conn.execute("DELETE FROM oauth_pending WHERE created_at < ?", (cutoff,)); conn.commit()
 
 # --- liked / disliked tweets (owner feedback via check / x in the UI) ---
 
