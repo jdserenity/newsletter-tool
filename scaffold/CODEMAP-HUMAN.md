@@ -56,7 +56,8 @@ Manual path: `news-manual-fetch` → same fetch + edition build as the scheduler
 | API spend rows | `api_calls` |
 | Global cadence / append-unread | `app_settings` (singleton id=1) |
 | Owner OAuth tokens | `oauth_session` (singleton id=1) |
+| In-flight OAuth PKCE | `oauth_pending` (keyed by `state`; optional Checkout session id) |
 | Users + billing | `users`, `billing_accounts`, `billing_payments`, `billing_refunds` |
 | Like / dislike / read | `liked_tweets`, `disliked_tweets`, `read_tweets`, `read_newsletters` |
 | Cached API payloads | `tweets.raw_json` (rebuild editions without refetch) |
-| Session cookie | signed by `SESSION_SECRET` (browser; may sync into `oauth_session` on signed-in `GET /`) |
+| Session cookie | signed by `SESSION_SECRET` (signed-in user; may sync into `oauth_session` on `GET /`). Pre-callback OAuth handshake lives in `oauth_pending`, not the cookie. |

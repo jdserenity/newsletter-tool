@@ -161,6 +161,39 @@ def test_callback_exchanges_code_and_sets_session(auth_client, monkeypatch):
   assert ">Home</a>" in r.text
   assert ">Settings</a>" not in r.text
 
+def test_callback_works_without_session_cookie(auth_client, monkeypatch):
+  # Phone/X-app handoff often returns to callback without the pre-OAuth cookie.
+  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {
+    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
+  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {
+    "id": "99", "username": "owner", "name": "Owner"})
+  login = auth_client.get("/auth/login/start", follow_redirects=False)
+  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+  auth_client.cookies.clear()
+  r = auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
+  assert r.status_code == 303
+  assert r.headers["location"] == "/"
+  # Pending row is single-use — replay must fail even with the same state.
+  auth_client.cookies.clear()
+  r2 = auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
+  assert r2.status_code == 400
+  assert "Invalid OAuth state" in r2.json()["detail"]
+
+def test_callback_rejects_expired_oauth_pending(auth_client, monkeypatch):
+  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {
+    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
+  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {
+    "id": "99", "username": "owner", "name": "Owner"})
+  login = auth_client.get("/auth/login/start", follow_redirects=False)
+  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+  c = db.connect(auth_client.app.state.db_path)
+  c.execute("UPDATE oauth_pending SET created_at = datetime('now', '-20 minutes') WHERE state = ?",
+    (state,)); c.commit()
+  auth_client.cookies.clear()
+  r = auth_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
+  assert r.status_code == 400
+  assert "Invalid OAuth state" in r.json()["detail"]
+
 def test_add_account_does_not_auto_follow(auth_client, monkeypatch):
   monkeypatch.setattr(auth, "refresh_access_token", lambda *a, **k: {
     "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})

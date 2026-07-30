@@ -90,6 +90,24 @@ def test_oauth_callback_links_pending_entry_payment(billing_client, monkeypatch)
   assert row is not None
   assert row["budget_usd"] == pytest.approx(1.0)
 
+def test_oauth_callback_links_entry_without_session_cookie(billing_client, monkeypatch):
+  # Same as above, but cookies wiped before callback (phone/X-app cookie split).
+  billing_client.get("/billing/success?session_id=cs_test_entry", follow_redirects=False)
+  monkeypatch.setattr(auth, "exchange_code", lambda *a, **k: {
+    "access_token": "user-at", "refresh_token": "user-rt", "expires_in": 7200})
+  monkeypatch.setattr(auth, "fetch_me", lambda *a, **k: {
+    "id": "99", "username": "owner", "name": "Owner"})
+  login = billing_client.get("/auth/login/start", follow_redirects=False)
+  state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+  billing_client.cookies.clear()
+  r = billing_client.get(f"/auth/callback?code=abc&state={state}", follow_redirects=False)
+  assert r.status_code == 303
+  assert r.headers["location"] == "/"
+  c = db.connect(billing_client.app.state.db_path)
+  row = db.get_billing_account(c, x_user_id="99")
+  assert row is not None
+  assert row["budget_usd"] == pytest.approx(1.0)
+
 def test_landing_enter_goes_to_oauth_not_checkout(billing_client):
   r = billing_client.get("/", follow_redirects=False)
   assert r.status_code == 200

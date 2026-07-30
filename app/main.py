@@ -84,19 +84,23 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
     @app.get("/auth/login/start")
     def auth_login_start(request: Request):
       # OAuth first; billing is enforced after identity is known (callback / home).
+      # Store PKCE + state in SQLite (not only the session cookie): phones often open
+      # X's app mid-flow and return to /auth/callback without the pre-OAuth cookie.
       state = secrets.token_urlsafe(32)
       verifier, challenge = auth.make_pkce_pair()
-      request.session[auth.SESSION_OAUTH_STATE] = state
-      request.session[auth.SESSION_CODE_VERIFIER] = verifier
+      checkout_sid = request.session.pop(auth.SESSION_BILLING_CHECKOUT_SESSION, None)
+      db.save_oauth_pending(conn(), state, verifier, checkout_session_id=checkout_sid)
       url = auth.build_authorize_url(
         auth_config.client_id, auth_config.callback_url, state, challenge, auth_config.scopes)
       return RedirectResponse(url, status_code=303)
 
     @app.get("/auth/callback")
     def auth_callback(request: Request, code: str = "", state: str = ""):
-      if state != request.session.get(auth.SESSION_OAUTH_STATE):
+      c = conn()
+      pending = db.take_oauth_pending(c, state)
+      if not pending:
         raise HTTPException(400, "Invalid OAuth state")
-      verifier = request.session.get(auth.SESSION_CODE_VERIFIER)
+      verifier = pending.get("code_verifier")
       if not code or not verifier:
         raise HTTPException(400, "Missing authorization code")
       http = auth.http_client(auth_config)
@@ -106,9 +110,9 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
         me = auth.fetch_me(http, token["access_token"])
       except Exception as e:
         raise HTTPException(400, f"OAuth token exchange failed: {e}") from e
-      c = conn()
       user_id = db.upsert_user(c, me["id"], me["username"], me.get("name", ""))
-      checkout_sid = request.session.pop(auth.SESSION_BILLING_CHECKOUT_SESSION, None)
+      checkout_sid = pending.get("checkout_session_id") or request.session.pop(
+        auth.SESSION_BILLING_CHECKOUT_SESSION, None)
       if billing_config.enabled and checkout_sid:
         try:
           sess = billing.retrieve_checkout_session(billing_config, checkout_sid)
@@ -118,8 +122,6 @@ def create_app(db_path=None, with_scheduler=True, auth_enabled=True, auth_config
       auth.store_user_session(request, token, me)
       db.save_oauth_session(c, me["id"], token["access_token"], token.get("refresh_token"),
         expires_at=auth.expires_at_from_token(token))
-      request.session.pop(auth.SESSION_OAUTH_STATE, None)
-      request.session.pop(auth.SESSION_CODE_VERIFIER, None)
       if billing_config.enabled:
         billing_row = db.get_billing_account(c, user_id=user_id)
         if not db.billing_access_ok(billing_row):

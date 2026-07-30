@@ -46,7 +46,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 
 ## SQLite
 - Path: `DATABASE_PATH` env, else `~/.local/share/newsletter-tool/newsletter.db` (outside repo; shared across worktrees).
-- Tables: `accounts`, `tweets`, `editions`, `api_calls`, `oauth_session` (singleton id=1), `app_settings` (singleton id=1: `cadence`, `append_unread`), `users`, `billing_accounts`, `billing_payments`, `billing_refunds`, `liked_tweets`, `disliked_tweets`, `read_tweets`, `read_newsletters`
+- Tables: `accounts`, `tweets`, `editions`, `api_calls`, `oauth_session` (singleton id=1), `oauth_pending` (PKCE `state`→`code_verifier` + optional Checkout id; TTL 10m, single-use), `app_settings` (singleton id=1: `cadence`, `append_unread`), `users`, `billing_accounts`, `billing_payments`, `billing_refunds`, `liked_tweets`, `disliked_tweets`, `read_tweets`, `read_newsletters`
 - `accounts` defaults: quotes on, replies/retweets off; optional legacy `followed_at` (unused)
 - `app_settings` defaults: `cadence='twice_weekly'`, `append_unread=1`
 - Legacy `digests` → `editions` rename on connect
@@ -80,7 +80,7 @@ Dense system map for agents. Confirmed facts only. Lessons → `scaffold/PROJECT
 | POST | `/billing/topup` | Auth; form `budget_usd` → budget+$1 Checkout |
 | GET | `/billing/topup/success` | Apply top-up payment |
 | POST | `/billing/cancel-subscription` | Auth; cancel at period end |
-| GET/POST | `/auth/login`, `/auth/login/start`, `/auth/callback`, `/auth/logout` | OAuth PKCE; always starts OAuth; callback stores session then gates on billing; logout → `/` |
+| GET/POST | `/auth/login`, `/auth/login/start`, `/auth/callback`, `/auth/logout` | OAuth PKCE; `/auth/login/start` writes `oauth_pending` (not cookie-only) so phone/X-app handoff still completes; callback consumes pending by `state`, stores session, gates on billing; logout → `/` |
 
 ## UI behavior
 - **Out-links** (X profile/tweet/media, RSS): `target="_blank" rel="noopener noreferrer"`. In-app nav same tab.
